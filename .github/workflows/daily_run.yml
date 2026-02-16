@@ -1,0 +1,79 @@
+name: Daily Risk Pipeline
+
+on:
+  schedule:
+    # Run daily at 9:00 AM Toronto time (EST/EDT)
+    # 9 AM EST = 2 PM UTC (winter), 1 PM UTC (summer)
+    - cron: '0 14 * * *'
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  ingest-and-score:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: protocol_health
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Initialize database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/protocol_health
+        run: |
+          psql $DATABASE_URL -f db/schema.sql
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/protocol_health
+        run: |
+          psql $DATABASE_URL -f db/migrations/001_category_pools_upgrade.sql
+
+      - name: Run full pipeline (fetch → normalize → score)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/protocol_health
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python -m ingest.run_pipeline
+
+      - name: Generate Daily Risk Brief
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/protocol_health
+        run: |
+          python scripts/generate_risk_brief.py
+
+      - name: Upload Risk Brief
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-risk-brief
+          path: risk-brief-*.md
+          retention-days: 30
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Daily risk pipeline failed! Check logs."
+          # Add Slack/email notification here if needed

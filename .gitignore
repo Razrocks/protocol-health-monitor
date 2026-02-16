@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+*.csv
+*.json
+!dbt/dbt_project.yml
+!dbt/profiles.yml
+defillama_test_output.json
+
+# Logs
+*.log
+
+# Docker
+*.pid
+
+# Markdown reports (generated)
+risk-brief-*.md
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/

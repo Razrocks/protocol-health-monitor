@@ -1,0 +1,39 @@
+# Protocol Health Monitor - Monitored Protocols Configuration
+# Use `python -m tools.discover_projects` to verify yields_project names.
+
+protocols:
+  - name: "Aave V3"
+    category: LENDING
+    protocol_slug: "aave-v3"
+    yields_project: "aave-v3"
+    enabled: true
+
+  - name: "Sky"
+    category: LENDING
+    protocol_slug: "sky-lending"
+    yields_project: "sky-lending"
+    enabled: true
+
+  - name: "Uniswap V3"
+    category: DEX
+    protocol_slug: "uniswap-v3"
+    yields_project: "uniswap-v3"
+    enabled: true
+
+  - name: "Curve"
+    category: DEX
+    protocol_slug: "curve-finance"
+    yields_project: "curve-dex"
+    enabled: true
+
+  - name: "Lido"
+    category: LSD
+    protocol_slug: "lido"
+    yields_project: "lido"
+    enabled: true
+
+  - name: "GMX"
+    category: PERP
+    protocol_slug: "gmx"
+    yields_project: "gmx-v2-perps"
+    enabled: true

@@ -1,0 +1,1946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocol Health Monitor - Risk Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #000000;
+            --bg-secondary: #0a0a0a;
+            --bg-card: #0f0f0f;
+            --text-primary: #ffffff;
+            --text-secondary: #999999;
+            --text-muted: #6a6a6a;
+            --border-color: #1a1a1a;
+            --accent-green: #00ff88;
+            --accent-yellow: #ffaa00;
+            --accent-red: #ff3366;
+            --accent-blue: #00aaff;
+            --accent-purple: #aa00ff;
+            --accent-crit: #ff0040;
+            --grid-color: #1e1e1e;
+        }
+
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+        }
+
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }
+
+        .title {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-primary);
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .nav {
+            display: flex;
+            gap: 32px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .nav a:hover { color: var(--text-primary); }
+        .nav a.active { color: var(--text-primary); }
+        .nav a.active::after {
+            content: '';
+            position: absolute;
+            bottom: -17px;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--accent-green);
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .grid-5 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-green), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .metric-card:hover::before { opacity: 0.5; }
+
+        .metric-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: 300;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: -1px;
+            margin-bottom: 8px;
+        }
+
+        .metric-change {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .change-positive { color: var(--accent-green); }
+        .change-negative { color: var(--accent-red); }
+        .change-neutral { color: var(--text-secondary); }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .panel-title {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+        }
+
+        .btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .btn.active {
+            background: var(--accent-green);
+            color: var(--bg-primary);
+            border-color: var(--accent-green);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .data-table thead {
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .data-table th.right { text-align: right; }
+        .data-table th.center { text-align: center; }
+
+        .data-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.2s;
+        }
+
+        .data-table tbody tr:hover {
+            background: rgba(0, 255, 136, 0.02);
+        }
+
+        .data-table td {
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+
+        .data-table td.right { text-align: right; }
+        .data-table td.center { text-align: center; }
+
+        .protocol-name {
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .protocol-id {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .category-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+
+        .cat-lending { color: #00aaff; border-color: #00aaff; }
+        .cat-dex { color: #00ff88; border-color: #00ff88; }
+        .cat-lsd { color: #aa00ff; border-color: #aa00ff; }
+        .cat-perp { color: #ffaa00; border-color: #ffaa00; }
+
+        .risk-score {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 16px;
+            padding: 6px 12px;
+            border: 1px solid;
+            display: inline-block;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .risk-critical { color: var(--accent-red); border-color: var(--accent-red); background: rgba(255, 51, 102, 0.05); }
+        .risk-high { color: var(--accent-yellow); border-color: var(--accent-yellow); background: rgba(255, 170, 0, 0.05); }
+        .risk-medium { color: var(--accent-blue); border-color: var(--accent-blue); background: rgba(0, 170, 255, 0.05); }
+        .risk-low { color: var(--accent-green); border-color: var(--accent-green); background: rgba(0, 255, 136, 0.05); }
+        .risk-crit { color: var(--accent-crit); border-color: var(--accent-crit); background: rgba(255, 0, 64, 0.1); font-weight: 700; }
+
+        .alerts { display: flex; flex-direction: column; gap: 4px; }
+
+        .alert-item {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-left: 2px solid var(--accent-red);
+            background: rgba(255, 51, 102, 0.05);
+            color: var(--accent-red);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+            margin-bottom: 16px;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .risk-calc {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            line-height: 1.8;
+        }
+
+        .risk-calc-title {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .calc-line {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .calc-line:last-child {
+            border-bottom: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+            font-weight: 600;
+        }
+
+        .calc-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent-blue);
+            margin-top: 16px;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .calc-condition { color: var(--text-secondary); }
+        .calc-value { color: var(--text-primary); }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1px;
+            background: var(--border-color);
+            border: 1px solid var(--border-color);
+            margin-bottom: 16px;
+        }
+
+        .metric-cell {
+            background: var(--bg-card);
+            padding: 16px;
+        }
+
+        .metric-cell-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .metric-cell-value {
+            font-size: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 300;
+        }
+
+        .metric-cell-sub {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .loading-container {
+            text-align: center;
+            padding: 60px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-green);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .coverage-bar {
+            height: 4px;
+            background: var(--border-color);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .coverage-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+
+        @media (max-width: 1200px) {
+            .grid { grid-template-columns: 1fr 1fr; }
+            .grid-5 { grid-template-columns: 1fr 1fr 1fr; }
+            .chart-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .grid, .grid-3, .grid-5 { grid-template-columns: 1fr; }
+            .header-content { flex-direction: column; gap: 16px; }
+            .nav { gap: 16px; font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const API_BASE = 'http://localhost:5000/api';
+
+        // Fix blurry canvas text on high-DPI / scaled displays
+        Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;
+        Chart.defaults.font.family = "'JetBrains Mono', monospace";
+        Chart.defaults.font.size = 12;
+        Chart.defaults.color = '#999999';
+
+        // ============================================================
+        // Utility Functions
+        // ============================================================
+        const formatTVL = (tvl) => {
+            if (!tvl && tvl !== 0) return '-';
+            if (tvl >= 1e9) return `${(tvl / 1e9).toFixed(2)}B`;
+            if (tvl >= 1e6) return `${(tvl / 1e6).toFixed(2)}M`;
+            if (tvl >= 1e3) return `${(tvl / 1e3).toFixed(2)}K`;
+            return tvl.toFixed(2);
+        };
+
+        const formatPercent = (pct) => {
+            if (pct === null || pct === undefined) return '-';
+            return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+        };
+
+        const formatPctShort = (pct) => {
+            if (pct === null || pct === undefined) return 'N/A';
+            return `${(pct * 100).toFixed(1)}%`;
+        };
+
+        const getRiskClass = (score) => {
+            if (score === null || score === undefined) return 'risk-low';
+            if (score >= 60) return 'risk-critical';
+            if (score >= 40) return 'risk-high';
+            if (score >= 20) return 'risk-medium';
+            return 'risk-low';
+        };
+
+        const getSeverityClass = (severity) => {
+            const map = { 'crit': 'risk-crit', 'high': 'risk-critical', 'med': 'risk-high', 'low': 'risk-low' };
+            return map[severity] || 'risk-low';
+        };
+
+        const getCategoryClass = (category) => {
+            if (!category) return 'cat-lending';
+            const c = category.toLowerCase();
+            const map = { 'lending': 'cat-lending', 'dex': 'cat-dex', 'lsd': 'cat-lsd', 'perp': 'cat-perp' };
+            return map[c] || 'cat-lending';
+        };
+
+        const coverageColor = (pct) => {
+            if (pct === null || pct === undefined) return 'var(--text-muted)';
+            if (pct >= 0.8) return 'var(--accent-green)';
+            if (pct >= 0.5) return 'var(--accent-yellow)';
+            return 'var(--accent-red)';
+        };
+
+        // Reusable N/A indicator with explanation
+        const NaValue = ({ note }) => (
+            <span style={{cursor:'help'}}>
+                <span style={{color:'var(--text-muted)'}}>N/A</span>
+                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px',fontWeight:400}}>{note || 'Source does not provide this metric'}</div>
+            </span>
+        );
+
+        // ============================================================
+        // Risk Score Methodology (Collapsible)
+        // ============================================================
+        const MethodologyDropdown = () => {
+            const [open, setOpen] = useState(false);
+            return (
+                <div className="panel">
+                    <div className="panel-header" style={{cursor: 'pointer', marginBottom: open ? '20px' : '0', paddingBottom: open ? '16px' : '0', borderBottom: open ? '1px solid var(--border-color)' : 'none'}} onClick={() => setOpen(!open)}>
+                        <div className="panel-title" style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                            <span style={{display: 'inline-block', transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', fontSize: '12px'}}>&#9654;</span>
+                            Risk Score Methodology
+                        </div>
+                        <span style={{fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono'}}>{open ? 'COLLAPSE' : 'EXPAND'}</span>
+                    </div>
+                    {open && (
+                        <div className="risk-calc">
+                            <div className="risk-calc-title">Global Alerts (All Categories)</div>
+                            <div className="calc-line"><span className="calc-condition">TVL Drop >= 8% (7D)</span><span className="calc-value">+40 pts (HIGH)</span></div>
+                            <div className="calc-line"><span className="calc-condition">TVL Drop >= 3% (1D)</span><span className="calc-value">+20 pts (MED)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Chain Concentration >= 70%</span><span className="calc-value">+15 pts (MED/LOW)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Concentration Spike >= 10pp (7D)</span><span className="calc-value">+25 pts (HIGH)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Data Gap Detected</span><span className="calc-value">+10 pts (LOW)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Low Coverage (&lt; 50%)</span><span className="calc-value">+10 pts (MED)</span></div>
+
+                            <div className="calc-section-title" style={{marginTop: '20px'}}>Lending-Only Alerts (Material Pools)</div>
+                            <div className="calc-line"><span className="calc-condition">Utilization Extreme (material pool >= 90%)</span><span className="calc-value">+40 pts (CRIT)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Utilization Critical (avg >= 80%)</span><span className="calc-value">+25 pts (HIGH)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Rate Spread Severe (material pool >= 6%)</span><span className="calc-value">+25 pts (HIGH)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Rate Spread Stress (material pool >= 3%)</span><span className="calc-value">+15 pts (MED)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Rate Wild (CV >= 1.0)</span><span className="calc-value">+20 pts (HIGH)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Rate Unstable (CV >= 0.5)</span><span className="calc-value">+10 pts (MED)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Tail Pool Spike (non-material, util >= 90%)</span><span className="calc-value">+5 pts max (LOW)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Pool Concentration Risk (&lt; 3 pools for 80%)</span><span className="calc-value">+25 pts (HIGH)</span></div>
+                            <div className="calc-line"><span className="calc-condition">Insufficient History (&lt; 21 days)</span><span className="calc-value">+5 pts (LOW)</span></div>
+
+                            <div className="calc-section-title" style={{marginTop: '20px'}}>Guardrails</div>
+                            <div className="calc-line"><span className="calc-condition">Coverage &lt; 50%: lending points x 0.7</span><span className="calc-value">Reduced impact</span></div>
+                            <div className="calc-line"><span className="calc-condition">Metric coverage &lt; 50%: lending points x 0.7, block CRIT</span><span className="calc-value">Data quality gate</span></div>
+                            <div className="calc-line"><span className="calc-condition">Material pool: >= 5% of selected TVL or >= $250M</span><span className="calc-value">Noise filter</span></div>
+                            <div className="calc-line"><span className="calc-condition">LSD/PERP chain concentration: Structural Dependence</span><span className="calc-value">Label only</span></div>
+                            <div className="calc-line"><span className="calc-condition">Total Risk Score</span><span className="calc-value">min(sum, 100)</span></div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // ============================================================
+        // Overview Page
+        // ============================================================
+        const OverviewPage = () => {
+            const [protocols, setProtocols] = useState([]);
+            const [tvlHistory, setTvlHistory] = useState([]);
+            const [alertDrivers, setAlertDrivers] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [lastUpdate, setLastUpdate] = useState(null);
+            const [autoRefresh, setAutoRefresh] = useState(true);
+            const [nextRefreshIn, setNextRefreshIn] = useState(300);
+            const [timeRange, setTimeRange] = useState(30);
+            const [tvlMode, setTvlMode] = useState('indexed');
+            const tvlChartRef = useRef(null);
+            const driversChartRef = useRef(null);
+            const concSummaryChartRef = useRef(null);
+            const tvlChartInstance = useRef(null);
+            const driversChartInstance = useRef(null);
+            const concSummaryChartInstance = useRef(null);
+
+            useEffect(() => { fetchAll(); }, []);
+
+            useEffect(() => {
+                if (!autoRefresh) return;
+                const interval = setInterval(() => {
+                    fetchAll();
+                    setNextRefreshIn(300);
+                }, 5 * 60 * 1000);
+                return () => clearInterval(interval);
+            }, [autoRefresh]);
+
+            useEffect(() => {
+                if (!autoRefresh) return;
+                const countdown = setInterval(() => {
+                    setNextRefreshIn(prev => prev <= 1 ? 300 : prev - 1);
+                }, 1000);
+                return () => clearInterval(countdown);
+            }, [autoRefresh]);
+
+            // Re-fetch TVL history when timeRange changes
+            useEffect(() => {
+                if (protocols.length > 0) fetchTvlHistory(timeRange);
+            }, [timeRange]);
+
+            // Re-render TVL chart when tvlHistory, tvlMode, or protocols change
+            useEffect(() => {
+                if (tvlHistory.length > 0 && tvlChartRef.current) {
+                    setTimeout(() => renderTvlChart(), 50);
+                }
+                return () => { if (tvlChartInstance.current) tvlChartInstance.current.destroy(); };
+            }, [tvlHistory, tvlMode]);
+
+            // Render drivers + concentration charts after loading completes and canvases are in DOM
+            useEffect(() => {
+                if (loading || protocols.length === 0) return;
+                const t1 = setTimeout(() => {
+                    if (driversChartRef.current && alertDrivers) renderDriversChart();
+                    if (concSummaryChartRef.current) renderConcChart();
+                }, 150);
+                return () => {
+                    clearTimeout(t1);
+                    if (driversChartInstance.current) driversChartInstance.current.destroy();
+                    if (concSummaryChartInstance.current) concSummaryChartInstance.current.destroy();
+                };
+            }, [loading, protocols, alertDrivers]);
+
+            const fetchAll = async () => {
+                setLoading(true);
+                try {
+                    const [overviewRes, driversRes] = await Promise.all([
+                        fetch(`${API_BASE}/overview`),
+                        fetch(`${API_BASE}/alert-drivers`)
+                    ]);
+                    const overviewData = await overviewRes.json();
+                    const driversData = await driversRes.json();
+                    setProtocols(overviewData);
+                    setAlertDrivers(driversData);
+                    setLastUpdate(new Date());
+                    // Fetch TVL history for current range
+                    fetchTvlHistory(timeRange);
+                } catch (err) {
+                    console.error('Error fetching overview:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchTvlHistory = async (days) => {
+                try {
+                    const res = await fetch(`${API_BASE}/tvl-history?days=${days}`);
+                    const data = await res.json();
+                    setTvlHistory(data);
+                } catch (err) {
+                    console.error('Error fetching TVL history:', err);
+                }
+            };
+
+            const formatCountdown = (s) => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+
+            const renderTvlChart = () => {
+                if (tvlChartInstance.current) tvlChartInstance.current.destroy();
+                if (tvlHistory.length === 0) return;
+
+                const colors = ['#00aaff', '#aa00ff', '#00ff88', '#ffaa00', '#ff3366', '#66ffcc'];
+
+                // Group by protocol
+                const byProtocol = {};
+                tvlHistory.forEach(row => {
+                    if (!byProtocol[row.name]) byProtocol[row.name] = [];
+                    byProtocol[row.name].push({ date: row.date, tvl: row.tvl_usd });
+                });
+
+                // Get sorted unique dates
+                const allDates = [...new Set(tvlHistory.map(r => r.date))].sort();
+                // Thin out labels for readability
+                const maxLabels = timeRange <= 30 ? allDates.length : timeRange <= 90 ? 15 : 12;
+                const labelStep = Math.max(1, Math.floor(allDates.length / maxLabels));
+                const labels = allDates.map((d, i) => i % labelStep === 0 || i === allDates.length - 1 ? d.slice(5) : '');
+
+                // Sort protocols by latest TVL desc
+                const protocolNames = Object.keys(byProtocol).sort((a, b) => {
+                    const aLast = byProtocol[a][byProtocol[a].length - 1]?.tvl || 0;
+                    const bLast = byProtocol[b][byProtocol[b].length - 1]?.tvl || 0;
+                    return bLast - aLast;
+                });
+
+                const datasets = protocolNames.map((name, i) => {
+                    const lookup = {};
+                    byProtocol[name].forEach(r => { lookup[r.date] = r.tvl; });
+                    const firstTvl = byProtocol[name][0]?.tvl || 1;
+                    const data = allDates.map(d => {
+                        const tvl = lookup[d];
+                        if (tvl === undefined || tvl === null) return null;
+                        return tvlMode === 'indexed' ? (100 * tvl / firstTvl) : (tvl / 1e9);
+                    });
+                    return {
+                        label: name,
+                        data,
+                        borderColor: colors[i % colors.length],
+                        backgroundColor: `${colors[i % colors.length]}15`,
+                        borderWidth: 1.5,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        fill: tvlMode === 'absolute',
+                        spanGaps: true
+                    };
+                });
+
+                const tvlCtx = tvlChartRef.current.getContext('2d');
+                tvlChartInstance.current = new Chart(tvlCtx, {
+                    type: 'line',
+                    data: { labels: allDates.map((d, i) => labels[i] || ''), datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: true, position: 'top', align: 'end', labels: { color: '#999999', font: { family: 'JetBrains Mono', size: 11 }, boxWidth: 12, boxHeight: 12, padding: 12, usePointStyle: true } },
+                            tooltip: {
+                                mode: 'index', intersect: false,
+                                callbacks: {
+                                    label: (ctx) => {
+                                        const v = ctx.parsed.y;
+                                        if (v === null || v === undefined) return `${ctx.dataset.label}: N/A`;
+                                        if (tvlMode === 'indexed') {
+                                            const pctChg = (v - 100).toFixed(1);
+                                            return `${ctx.dataset.label}: ${v.toFixed(1)} (${pctChg >= 0 ? '+' : ''}${pctChg}%)`;
+                                        }
+                                        return `${ctx.dataset.label}: $${v.toFixed(2)}B`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { grid: { color: '#1e1e1e', drawBorder: false }, ticks: { color: '#999999', font: { family: 'JetBrains Mono', size: 11 }, maxRotation: 0 } },
+                            y: { grid: { color: '#1e1e1e', drawBorder: false }, ticks: { color: '#999999', font: { family: 'JetBrains Mono', size: 11 }, callback: (v) => tvlMode === 'indexed' ? v : '$' + v + 'B' } }
+                        },
+                        interaction: { intersect: false, mode: 'index' }
+                    }
+                });
+            };
+
+            const renderDriversChart = () => {
+                if (driversChartInstance.current) driversChartInstance.current.destroy();
+                if (!alertDrivers || !alertDrivers.drivers || alertDrivers.drivers.length === 0) return;
+
+                const drivers = alertDrivers.drivers;
+                const displayName = (t) => {
+                    const map = {
+                        'TVL_7D_DROP': 'TVL 7D Drop',
+                        'TVL_1D_DROP': 'TVL 1D Drop',
+                        'UTILIZATION_EXTREME': 'Utilization Extreme',
+                        'UTILIZATION_CRITICAL': 'Utilization Critical',
+                        'RATE_SPREAD_STRESS': 'Rate Spread Stress',
+                        'RATE_SPREAD_SEVERE': 'Rate Spread Severe',
+                        'POOL_CONCENTRATION_RISK': 'Pool Concentration Risk',
+                        'TOP_CHAIN_CONCENTRATION_HIGH': 'Top Chain Concentration',
+                        'STRUCTURAL_CHAIN_DEPENDENCE': 'Structural Chain Dependence',
+                        'DATA_INCOMPLETE_RATE': 'Data Incomplete (Rate)',
+                        'DATA_INCOMPLETE_UTIL': 'Data Incomplete (Util)',
+                        'TAIL_POOL_UTIL_SPIKE': 'Tail Pool Spike',
+                        'RATE_UNSTABLE': 'Rate Unstable',
+                        'RATE_WILD': 'Rate Wild',
+                        'LOW_COVERAGE': 'Low Coverage',
+                        'DATA_GAP': 'Data Gap',
+                    };
+                    return map[t] || t.replace(/_/g, ' ');
+                };
+                // Deduplicate by display name (merge severities if API returns split rows)
+                const deduped = [];
+                const seen = {};
+                drivers.forEach(d => {
+                    const name = displayName(d.alert_type);
+                    if (seen[name]) {
+                        const existing = seen[name];
+                        ['low','med','high','crit'].forEach(s => { existing.severities[s] = (existing.severities[s]||0) + (d.severities[s]||0); });
+                        existing.total += d.total;
+                        d.protocols.forEach(p => { if (!existing.protocols.includes(p)) existing.protocols.push(p); });
+                    } else {
+                        const copy = { ...d, severities: { ...d.severities }, protocols: [...d.protocols], displayName: name };
+                        seen[name] = copy;
+                        deduped.push(copy);
+                    }
+                });
+                const labels = deduped.map(d => d.displayName);
+                const sevColors = { low: 'rgba(0,255,136,0.7)', med: 'rgba(0,170,255,0.7)', high: 'rgba(255,170,0,0.8)', crit: 'rgba(255,0,64,0.9)' };
+
+                const datasets = ['low', 'med', 'high', 'crit'].map(sev => ({
+                    label: sev.toUpperCase(),
+                    data: deduped.map(d => d.severities[sev] || 0),
+                    backgroundColor: sevColors[sev],
+                    borderWidth: 0,
+                    maxBarThickness: 32
+                }));
+
+                const ctx = driversChartRef.current.getContext('2d');
+                driversChartInstance.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels, datasets },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: { right: 8 } },
+                        plugins: {
+                            legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 10, padding: 8, usePointStyle: true, font: { size: 11 } } },
+                            tooltip: {
+                                callbacks: {
+                                    title: (items) => deduped[items[0]?.dataIndex]?.displayName || '',
+                                    afterBody: (items) => {
+                                        const idx = items[0]?.dataIndex;
+                                        if (idx === undefined) return '';
+                                        const d = deduped[idx];
+                                        return `Protocols: ${d.protocols.join(', ')}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { stacked: true, grid: { color: '#1e1e1e' }, ticks: { stepSize: 1, font: { size: 11 } }, beginAtZero: true },
+                            y: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#999999' } }
+                        }
+                    }
+                });
+            };
+
+            const renderConcChart = () => {
+                if (concSummaryChartInstance.current) concSummaryChartInstance.current.destroy();
+                if (protocols.length === 0) return;
+
+                const sorted = [...protocols].sort((a, b) =>
+                    (b.top_pool_share_total || b.top_pool_share || 0) - (a.top_pool_share_total || a.top_pool_share || 0)
+                );
+                const labels = sorted.map(p => p.name);
+                const poolShare = sorted.map(p => ((p.top_pool_share_total || p.top_pool_share || 0) * 100));
+                const chainShare = sorted.map(p => (p.top_chain_share_pct || 0));
+
+                const ctx = concSummaryChartRef.current.getContext('2d');
+                // Datalabels plugin — inline to show % at bar ends
+                const datalabelsPlugin = {
+                    id: 'concBarLabels',
+                    afterDatasetsDraw(chart) {
+                        const { ctx: c } = chart;
+                        chart.data.datasets.forEach((ds, dsIdx) => {
+                            const meta = chart.getDatasetMeta(dsIdx);
+                            meta.data.forEach((bar, i) => {
+                                const val = ds.data[i];
+                                if (val === null || val === undefined || val === 0) return;
+                                c.save();
+                                c.font = '11px JetBrains Mono';
+                                c.fillStyle = '#cccccc';
+                                c.textAlign = 'left';
+                                c.textBaseline = 'middle';
+                                c.fillText(`${val.toFixed(0)}%`, bar.x + 6, bar.y);
+                                c.restore();
+                            });
+                        });
+                    }
+                };
+                concSummaryChartInstance.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'Top Pool Share', data: poolShare, backgroundColor: 'rgba(0,170,255,0.7)', borderWidth: 0, barThickness: 14 },
+                            { label: 'Top Chain Share', data: chainShare, backgroundColor: 'rgba(170,0,255,0.6)', borderWidth: 0, barThickness: 14 }
+                        ]
+                    },
+                    plugins: [datalabelsPlugin],
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: { right: 40 } },
+                        plugins: {
+                            legend: { display: true, position: 'top', align: 'end', labels: { color: '#999999', font: { family: 'JetBrains Mono', size: 11 }, boxWidth: 10, padding: 8, usePointStyle: true } },
+                            tooltip: {
+                                callbacks: {
+                                    label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%`,
+                                    afterBody: (items) => {
+                                        const idx = items[0]?.dataIndex;
+                                        if (idx === undefined) return '';
+                                        const p = sorted[idx];
+                                        return `TVL: $${formatTVL(p.tvl_usd)} | P80: ${p.pool_count_80 ?? 'N/A'} pools | Cov: ${p.coverage_pct !== null && p.coverage_pct !== undefined ? (p.coverage_pct*100).toFixed(0)+'%' : 'N/A'}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { grid: { color: '#1e1e1e' }, ticks: { color: '#999999', font: { family: 'JetBrains Mono', size: 11 }, callback: (v) => v + '%' }, max: 100, title: { display: true, text: 'Share %', color: '#999999', font: { family: 'JetBrains Mono', size: 11 } } },
+                            y: { grid: { display: false }, ticks: { color: '#999999', font: { family: 'JetBrains Mono', size: 11 } }, title: { display: true, text: 'Protocol', color: '#6a6a6a', font: { family: 'IBM Plex Sans', size: 11 } } }
+                        }
+                    }
+                });
+            };
+
+            const stats = (() => {
+                if (protocols.length === 0) return { totalTVL: 0, totalAlerts: 0, avgRisk: 0, avgCoverage: 0, coverageIssues: 0 };
+                const totalTVL = protocols.reduce((s, p) => s + (p.tvl_usd||0), 0);
+                const totalAlerts = protocols.reduce((s, p) => s + (p.alerts?.alert_count || 0), 0);
+                const avgRisk = protocols.reduce((s, p) => s + (p.risk_score||0), 0) / protocols.length;
+                const withCoverage = protocols.filter(p => p.coverage_pct !== null && p.coverage_pct !== undefined);
+                const avgCoverage = withCoverage.length > 0 ? withCoverage.reduce((s, p) => s + p.coverage_pct, 0) / withCoverage.length : null;
+                const coverageIssues = protocols.filter(p => p.coverage_pct !== null && p.coverage_pct < 0.5).length;
+                return { totalTVL, totalAlerts, avgRisk, avgCoverage, coverageIssues };
+            })();
+
+            if (loading) {
+                return (<div className="loading-container"><div className="spinner"></div><div>Loading protocol data...</div></div>);
+            }
+
+            return (
+                <div className="container">
+                    {/* Refresh Bar */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', padding: '16px 20px', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '11px', fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)' }}>
+                            <span>LAST UPDATE:</span>
+                            <span style={{color: 'var(--text-primary)'}}>{lastUpdate ? lastUpdate.toLocaleTimeString() : 'Loading...'}</span>
+                            {autoRefresh && (<>
+                                <span style={{color: 'var(--text-muted)'}}>|</span>
+                                <span style={{color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: '6px'}}>
+                                    <span style={{ width: '6px', height: '6px', background: 'var(--accent-green)', borderRadius: '50%', animation: 'pulse 2s ease-in-out infinite' }}></span>
+                                    AUTO-REFRESH
+                                </span>
+                                <span style={{color: 'var(--text-muted)'}}>|</span>
+                                <span style={{color: 'var(--text-secondary)'}}>NEXT IN: <span style={{color: 'var(--text-primary)'}}>{formatCountdown(nextRefreshIn)}</span></span>
+                            </>)}
+                        </div>
+                        <div style={{display: 'flex', gap: '12px'}}>
+                            <button className="btn" onClick={() => setAutoRefresh(!autoRefresh)} style={{ background: autoRefresh ? 'transparent' : 'var(--accent-green)', color: autoRefresh ? 'var(--text-secondary)' : 'var(--bg-primary)', borderColor: autoRefresh ? 'var(--border-color)' : 'var(--accent-green)' }}>
+                                {autoRefresh ? 'Disable Auto' : 'Enable Auto'}
+                            </button>
+                            <button className="btn" onClick={() => { fetchAll(); setNextRefreshIn(300); }} style={{ background: 'var(--accent-green)', color: 'var(--bg-primary)', borderColor: 'var(--accent-green)' }}>
+                                Refresh Now
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Top Metric Cards */}
+                    <div className="grid">
+                        <div className="metric-card">
+                            <div className="metric-label">Total TVL</div>
+                            <div className="metric-value">${formatTVL(stats.totalTVL)}</div>
+                            <div className="metric-change change-neutral"><span style={{color: 'var(--text-muted)'}}>Across {protocols.length} protocols</span></div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="metric-label">Active Alerts</div>
+                            <div className="metric-value">{stats.totalAlerts}</div>
+                            <div className={`metric-change ${stats.totalAlerts > 0 ? 'change-negative' : 'change-positive'}`}>
+                                {stats.totalAlerts > 0 ? `${stats.totalAlerts} requiring attention` : 'All systems healthy'}
+                            </div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="metric-label">Avg Risk Score</div>
+                            <div className="metric-value">{stats.avgRisk.toFixed(1)}</div>
+                            <div className="metric-change change-neutral"><span style={{color: 'var(--text-muted)'}}>{protocols.filter(p => (p.risk_score||0) >= 40).length} high risk</span></div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="metric-label">Data Coverage</div>
+                            <div className="metric-value">{stats.avgCoverage !== null ? `${(stats.avgCoverage * 100).toFixed(0)}%` : 'N/A'}</div>
+                            <div className="metric-change change-neutral">
+                                <span style={{color: stats.coverageIssues > 0 ? 'var(--accent-yellow)' : 'var(--text-muted)'}}>
+                                    {stats.coverageIssues > 0 ? `${stats.coverageIssues} LOW_COVERAGE` : 'All adequate'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Charts Row 1: Indexed TVL Overlay + Risk Drivers */}
+                    <div className="chart-grid">
+                        <div className="panel">
+                            <div className="panel-header">
+                                <div className="panel-title">Indexed TVL Overlay ({timeRange}D)</div>
+                                <div className="panel-actions">
+                                    <button className={`btn ${tvlMode === 'indexed' ? 'active' : ''}`} onClick={() => setTvlMode('indexed')}>Indexed</button>
+                                    <button className={`btn ${tvlMode === 'absolute' ? 'active' : ''}`} onClick={() => setTvlMode('absolute')}>Absolute</button>
+                                    <span style={{color: 'var(--text-muted)', margin: '0 4px'}}>|</span>
+                                    {[30, 90, 365].map(d => (
+                                        <button key={d} className={`btn ${timeRange === d ? 'active' : ''}`} onClick={() => setTimeRange(d)}>
+                                            {d === 365 ? '1Y' : `${d}D`}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="chart-container"><canvas ref={tvlChartRef}></canvas></div>
+                            {tvlMode === 'indexed' && <div style={{fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono', padding: '4px 4px 0'}}>Base = 100 at window start. Source: protocol_tvl_daily</div>}
+                        </div>
+                        <div className="panel">
+                            <div className="panel-header">
+                                <div className="panel-title">Risk Drivers (Alerts by Type)</div>
+                                {alertDrivers && <div className="panel-actions"><span style={{fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono'}}>{alertDrivers.date}</span></div>}
+                            </div>
+                            <div className="chart-container" style={{height: `${Math.max(220, (alertDrivers?.drivers?.length || 5) * 38 + 50)}px`}}><canvas ref={driversChartRef}></canvas></div>
+                        </div>
+                    </div>
+
+                    {/* Charts Row 2: Concentration Summary + Protocol Heatmap */}
+                    <div className="chart-grid">
+                        <div className="panel">
+                            <div className="panel-header"><div className="panel-title">Concentration Summary &mdash; Top Pool vs Top Chain Share</div></div>
+                            <div className="chart-container" style={{height: '240px'}}><canvas ref={concSummaryChartRef}></canvas></div>
+                            <div style={{fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono', padding: '4px 4px 0'}}>Top Pool Share = largest pool TVL / total pool TVL &nbsp;|&nbsp; Top Chain Share = largest chain TVL / total TVL</div>
+                        </div>
+                        <div className="panel">
+                            <div className="panel-header"><div className="panel-title">Protocol Heatmap</div></div>
+                            <div style={{overflowX: 'auto'}}>
+                                <table style={{width: '100%', borderCollapse: 'separate', borderSpacing: '3px', fontFamily: 'JetBrains Mono'}}>
+                                    <thead>
+                                        <tr>
+                                            {['Protocol','1D','7D','30D','Chain','P80','Cov','Alerts','Risk'].map(h => (
+                                                <th key={h} style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400, padding: '6px 4px', textAlign: 'center', borderBottom: '1px solid var(--border-color)'}}>{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {[...protocols].sort((a, b) => (b.risk_score||0) - (a.risk_score||0)).map(p => {
+                                            const G = { background: 'rgba(0,255,136,0.15)', color: '#00ff88' };
+                                            const Y = { background: 'rgba(255,170,0,0.15)', color: '#ffaa00' };
+                                            const R = { background: 'rgba(255,51,102,0.18)', color: '#ff3366' };
+                                            const N = { background: 'var(--bg-card)', color: 'var(--text-muted)' };
+                                            const tvlH = (v, w, b) => { if (v == null) return N; if (v >= 0) return G; if (v <= b) return R; if (v <= w) return Y; return G; };
+                                            const hiB = (v, w, b) => { if (v == null) return N; if (v >= b) return R; if (v >= w) return Y; return G; };
+                                            const loB = (v, w, b) => { if (v == null) return N; if (v <= b) return R; if (v <= w) return Y; return G; };
+                                            const cell = { width: '54px', height: '32px', textAlign: 'center', fontSize: '11px', fontWeight: 500, borderRadius: '3px', padding: '0 4px', verticalAlign: 'middle' };
+                                            const maxSev = p.alerts?.crit_count > 0 ? 'C' : p.alerts?.high_count > 0 ? 'H' : p.alerts?.med_count > 0 ? 'M' : p.alerts?.low_count > 0 ? 'L' : '-';
+                                            const sevStyle = maxSev === 'C' ? R : maxSev === 'H' ? { background: 'rgba(255,170,0,0.18)', color: '#ffaa00' } : maxSev === 'M' ? { background: 'rgba(0,170,255,0.15)', color: '#00aaff' } : maxSev === 'L' ? G : N;
+                                            const alertCount = p.alerts?.alert_count || 0;
+                                            return (
+                                                <tr key={p.protocol_id}>
+                                                    <td style={{...cell, width: 'auto', textAlign: 'left', fontFamily: 'IBM Plex Sans', fontSize: '12px', fontWeight: 600, background: 'transparent', color: 'var(--text-primary)', paddingLeft: '8px'}}>{p.name}</td>
+                                                    <td style={{...cell, ...tvlH(p.tvl_1d_pct, -1, -3)}}>
+                                                        {p.tvl_1d_pct != null ? `${p.tvl_1d_pct >= 0 ? '+' : ''}${p.tvl_1d_pct.toFixed(1)}%` : '-'}
+                                                    </td>
+                                                    <td style={{...cell, ...tvlH(p.tvl_7d_pct, -3, -8)}}>
+                                                        {p.tvl_7d_pct != null ? `${p.tvl_7d_pct >= 0 ? '+' : ''}${p.tvl_7d_pct.toFixed(1)}%` : '-'}
+                                                    </td>
+                                                    <td style={{...cell, ...tvlH(p.tvl_30d_pct, -5, -15)}}>
+                                                        {p.tvl_30d_pct != null ? `${p.tvl_30d_pct >= 0 ? '+' : ''}${p.tvl_30d_pct.toFixed(1)}%` : '-'}
+                                                    </td>
+                                                    <td style={{...cell, ...hiB(p.top_chain_share_pct, 50, 70)}}>
+                                                        {p.top_chain_share_pct ? `${p.top_chain_share_pct.toFixed(0)}%` : '-'}
+                                                    </td>
+                                                    <td style={{...cell, ...loB(p.pool_count_80, 5, 3)}}>
+                                                        {p.pool_count_80 ?? '-'}
+                                                    </td>
+                                                    <td style={{...cell, ...loB(p.coverage_pct, 0.8, 0.5)}}>
+                                                        {p.coverage_pct != null ? `${(p.coverage_pct * 100).toFixed(0)}%` : '-'}
+                                                    </td>
+                                                    <td style={{...cell, ...sevStyle}}>
+                                                        {alertCount > 0 ? `${alertCount} ${maxSev}` : '-'}
+                                                    </td>
+                                                    <td style={{...cell, background: 'transparent'}}>
+                                                        <span className={`risk-score ${getRiskClass(p.risk_score)}`} style={{fontSize: '11px', padding: '3px 10px'}}>{p.risk_score ?? '-'}</span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Risk Score Methodology (Collapsible) */}
+                    <MethodologyDropdown />
+
+                    {/* Protocol Status Matrix */}
+                    <div className="panel">
+                        <div className="panel-header"><div className="panel-title">Protocol Status Matrix</div></div>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Protocol</th>
+                                    <th>Category</th>
+                                    <th className="right">TVL</th>
+                                    <th className="right">1D</th>
+                                    <th className="right">7D</th>
+                                    <th className="right">Top Chain</th>
+                                    <th className="right">Coverage</th>
+                                    <th className="center">Alerts</th>
+                                    <th className="center">Risk</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[...protocols].sort((a, b) => (b.risk_score||0) - (a.risk_score||0)).map((p) => (
+                                    <tr key={p.protocol_id}>
+                                        <td>
+                                            <div className="protocol-name">{p.name}</div>
+                                            <div className="protocol-id">{p.slug}</div>
+                                        </td>
+                                        <td><span className={`category-badge ${getCategoryClass(p.category)}`}>{(p.category||'').toUpperCase()}</span></td>
+                                        <td className="right">{formatTVL(p.tvl_usd)}</td>
+                                        <td className={`right ${(p.tvl_1d_pct||0) >= 0 ? 'change-positive' : 'change-negative'}`}>{formatPercent(p.tvl_1d_pct)}</td>
+                                        <td className={`right ${(p.tvl_7d_pct||0) >= 0 ? 'change-positive' : 'change-negative'}`}>{formatPercent(p.tvl_7d_pct)}</td>
+                                        <td className="right">
+                                            {p.top_chain || '-'}
+                                            {p.top_chain_share_pct && <span style={{color: 'var(--text-muted)', marginLeft: '4px'}}>({p.top_chain_share_pct.toFixed(0)}%)</span>}
+                                        </td>
+                                        <td className="right">
+                                            <span style={{color: coverageColor(p.coverage_pct)}}>
+                                                {p.coverage_pct !== null && p.coverage_pct !== undefined ? `${(p.coverage_pct * 100).toFixed(0)}%` : '-'}
+                                            </span>
+                                        </td>
+                                        <td className="center">
+                                            {p.alerts && p.alerts.alert_count > 0 ? (
+                                                <div style={{display: 'flex', gap: '4px', justifyContent: 'center'}}>
+                                                    {p.alerts.crit_count > 0 && <span style={{padding: '2px 6px', fontSize: '11px', background: 'rgba(255,0,64,0.2)', color: 'var(--accent-crit)', fontFamily: 'JetBrains Mono'}}>{p.alerts.crit_count}C</span>}
+                                                    {p.alerts.high_count > 0 && <span style={{padding: '2px 6px', fontSize: '11px', background: 'rgba(255,51,102,0.1)', color: 'var(--accent-red)', fontFamily: 'JetBrains Mono'}}>{p.alerts.high_count}H</span>}
+                                                    {p.alerts.med_count > 0 && <span style={{padding: '2px 6px', fontSize: '11px', background: 'rgba(255,170,0,0.1)', color: 'var(--accent-yellow)', fontFamily: 'JetBrains Mono'}}>{p.alerts.med_count}M</span>}
+                                                    {p.alerts.low_count > 0 && <span style={{padding: '2px 6px', fontSize: '11px', background: 'rgba(0,255,136,0.1)', color: 'var(--accent-green)', fontFamily: 'JetBrains Mono'}}>{p.alerts.low_count}L</span>}
+                                                </div>
+                                            ) : <span style={{color: 'var(--text-muted)'}}>--</span>}
+                                        </td>
+                                        <td className="center">
+                                            <span className={`risk-score ${getRiskClass(p.risk_score)}`}>{p.risk_score ?? '-'}</span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        // ============================================================
+        // Protocol Detail Page (Category-Aware)
+        // ============================================================
+        // AlertGroup: collapsible grouped alert with occurrence count
+        const AlertGroup = ({ group }) => {
+            const [expanded, setExpanded] = useState(false);
+            const a = group.latest;
+            const sevBorder = a.severity === 'crit' ? 'var(--accent-crit)' : a.severity === 'high' ? 'var(--accent-red)' : a.severity === 'med' ? 'var(--accent-yellow)' : 'var(--accent-green)';
+            return (
+                <div style={{
+                    border: `1px solid ${a.severity === 'crit' ? 'var(--accent-crit)' : 'var(--border-color)'}`,
+                    borderLeft: `4px solid ${sevBorder}`,
+                    background: a.severity === 'crit' ? 'rgba(255,0,64,0.08)' : 'var(--bg-secondary)',
+                    fontFamily: 'JetBrains Mono', fontSize: '11px'
+                }}>
+                    {/* Latest occurrence (always visible) */}
+                    <div style={{padding: '12px 16px', cursor: group.count > 1 ? 'pointer' : 'default'}} onClick={() => group.count > 1 && setExpanded(!expanded)}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                <span className={`risk-score ${getSeverityClass(a.severity)}`} style={{fontSize: '11px', padding: '2px 6px'}}>{(a.severity||'').toUpperCase()}</span>
+                                <span style={{fontWeight: 600}}>{a.alert_type}</span>
+                                {group.count > 1 && (
+                                    <span style={{padding: '1px 8px', fontSize: '11px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)', borderRadius: '3px'}}>
+                                        seen {group.count}x in 14D
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                <span style={{color: 'var(--text-muted)'}}>+{a.points || 0} pts | {a.date}</span>
+                                {group.count > 1 && <span style={{color: 'var(--text-muted)', fontSize: '11px'}}>{expanded ? '\u25B2' : '\u25BC'}</span>}
+                            </div>
+                        </div>
+                        <div style={{color: 'var(--text-secondary)', marginTop: '6px', fontSize: '11px'}}>{a.message}</div>
+                    </div>
+                    {/* Expanded history */}
+                    {expanded && group.history.length > 0 && (
+                        <div style={{borderTop: '1px solid var(--border-color)', padding: '8px 16px', background: 'rgba(0,0,0,0.2)'}}>
+                            <div style={{fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.5px', textTransform: 'uppercase', fontWeight: 600}}>Previous Occurrences</div>
+                            {group.history.map((h, hi) => (
+                                <div key={hi} style={{display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: hi < group.history.length - 1 ? '1px solid var(--border-color)' : 'none'}}>
+                                    <span style={{color: 'var(--text-secondary)'}}>{h.message}</span>
+                                    <span style={{color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: '16px'}}>+{h.points} pts | {h.date}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const ProtocolDetailPage = () => {
+            const [protocols, setProtocols] = useState([]);
+            const [selectedSlug, setSelectedSlug] = useState(null);
+            const [detail, setDetail] = useState(null);
+            const [pools, setPools] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [topPoolsData, setTopPoolsData] = useState(null);
+
+            useEffect(() => { fetchProtocols(); }, []);
+
+            useEffect(() => {
+                if (selectedSlug && protocols.length > 0) {
+                    const p = protocols.find(x => x.slug === selectedSlug);
+                    if (p) fetchDetail(p.protocol_id);
+                }
+            }, [selectedSlug]);
+
+            const fetchProtocols = async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/overview`);
+                    const data = await res.json();
+                    setProtocols(data);
+                    if (data.length > 0) setSelectedSlug(data[0].slug);
+                } catch (err) {
+                    console.error('Error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchDetail = async (protocolId) => {
+                try {
+                    const [detailRes, poolsRes, topPoolsRes] = await Promise.all([
+                        fetch(`${API_BASE}/protocol/${protocolId}`),
+                        fetch(`${API_BASE}/protocol/${protocolId}/pools`),
+                        fetch(`${API_BASE}/protocol/${protocolId}/top-pools?n=10`)
+                    ]);
+                    const detailData = await detailRes.json();
+                    const poolsData = await poolsRes.json();
+                    const topPools = await topPoolsRes.json();
+                    setDetail(detailData);
+                    setPools(poolsData);
+                    setTopPoolsData(topPools);
+                } catch (err) {
+                    console.error('Error:', err);
+                }
+            };
+
+            if (loading) {
+                return (<div className="loading-container"><div className="spinner"></div><div>Loading analytics...</div></div>);
+            }
+
+            const current = protocols.find(p => p.slug === selectedSlug);
+            const category = (current?.category || '').toUpperCase();
+            const latestMetrics = detail?.metrics?.[0] || {};
+
+            return (
+                <div className="container">
+                    {/* Protocol Selector Tabs */}
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', overflowX: 'auto', padding: '16px 0' }}>
+                        {protocols.map(p => (
+                            <button key={p.slug} className={`btn ${selectedSlug === p.slug ? 'active' : ''}`}
+                                onClick={() => setSelectedSlug(p.slug)}
+                                style={{ padding: '8px 16px', whiteSpace: 'nowrap' }}>
+                                {p.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    {current && (<>
+                        {/* Protocol Header */}
+                        <div className="panel">
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                                <div>
+                                    <h2 style={{fontSize: '24px', marginBottom: '8px'}}>
+                                        {current.name}
+                                        <span className={`category-badge ${getCategoryClass(category)}`} style={{marginLeft: '12px', verticalAlign: 'middle'}}>
+                                            {category}
+                                        </span>
+                                    </h2>
+                                    <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono' }}>
+                                        <span>Coverage: <span style={{color: coverageColor(current.coverage_pct)}}>{current.coverage_pct !== null && current.coverage_pct !== undefined ? `${(current.coverage_pct * 100).toFixed(0)}%` : 'N/A'}</span></span>
+                                        <span>Last updated: {latestMetrics.date || 'N/A'}</span>
+                                    </div>
+                                </div>
+                                <span className={`risk-score ${getRiskClass(current.risk_score)}`} style={{fontSize: '24px'}}>
+                                    {current.risk_score ?? '-'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Core Tiles (always shown) */}
+                        <div className="grid">
+                            <div className="metric-card">
+                                <div className="metric-label">Protocol TVL</div>
+                                <div className="metric-value">${formatTVL(current.tvl_usd)}</div>
+                                <div className={`metric-change ${(current.tvl_7d_pct||0) >= 0 ? 'change-positive' : 'change-negative'}`}>{formatPercent(current.tvl_7d_pct)} (7D)</div>
+                            </div>
+                            <div className="metric-card">
+                                <div className="metric-label">7D TVL Change</div>
+                                <div className="metric-value" style={{color: (current.tvl_7d_pct||0) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}}>{formatPercent(current.tvl_7d_pct)}</div>
+                                <div className="metric-change change-neutral"><span style={{color: 'var(--text-muted)'}}>30D: {formatPercent(current.tvl_30d_pct)}</span></div>
+                            </div>
+                            <div className="metric-card">
+                                <div className="metric-label">Top Chain Share</div>
+                                <div className="metric-value">{current.top_chain_share_pct ? `${current.top_chain_share_pct.toFixed(1)}%` : <NaValue note="Chain breakdown not available" />}</div>
+                                <div className="metric-change change-neutral"><span style={{color: 'var(--text-muted)'}}>{current.top_chain || 'N/A'}</span></div>
+                            </div>
+                            <div className="metric-card">
+                                <div className="metric-label">Active Alerts</div>
+                                <div className="metric-value">{current.alerts?.alert_count || 0}</div>
+                                <div className="metric-change change-neutral"><span style={{color: 'var(--text-muted)'}}>{(current.alerts?.high_count||0) + (current.alerts?.crit_count||0)} high/crit</span></div>
+                            </div>
+                        </div>
+
+                        {/* Category-Specific Risk Monitoring Panel */}
+                        <div className="panel">
+                            <div className="panel-header"><div className="panel-title">Risk Monitoring - {category}</div></div>
+
+                            {/* LENDING: 5 cards */}
+                            {category === 'LENDING' && (
+                                <>
+                                <div className="grid-5">
+                                    <div className="metric-card">
+                                        <div className="metric-label">Utilization</div>
+                                        <div className="metric-cell-value" style={{color: (latestMetrics.lending_util_avg||0) >= 0.8 ? 'var(--accent-red)' : (latestMetrics.lending_util_avg||0) >= 0.6 ? 'var(--accent-yellow)' : 'var(--accent-green)'}}>
+                                            {latestMetrics.lending_util_avg !== null && latestMetrics.lending_util_avg !== undefined ? `${(latestMetrics.lending_util_avg * 100).toFixed(1)}%` : <NaValue />}
+                                        </div>
+                                        <div className="metric-cell-sub">Avg | Max: {latestMetrics.lending_util_max !== null && latestMetrics.lending_util_max !== undefined ? `${(latestMetrics.lending_util_max * 100).toFixed(1)}%` : 'N/A'}</div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Rate Spread (B-S)</div>
+                                        <div className="metric-cell-value" style={{color: (latestMetrics.lending_spread_max||0) >= 6.0 ? 'var(--accent-red)' : (latestMetrics.lending_spread_max||0) >= 3.0 ? 'var(--accent-yellow)' : 'var(--accent-green)'}}>
+                                            {latestMetrics.lending_spread_max !== null && latestMetrics.lending_spread_max !== undefined ? `${latestMetrics.lending_spread_max.toFixed(2)}pp` : <NaValue />}
+                                        </div>
+                                        <div className="metric-cell-sub">Max | Median: {latestMetrics.lending_spread_median !== null && latestMetrics.lending_spread_median !== undefined ? `${latestMetrics.lending_spread_median.toFixed(2)}pp` : 'N/A'}</div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Rate Volatility 30D</div>
+                                        <div className="metric-cell-value">{latestMetrics.lending_rate_cv_supply_30d !== null && latestMetrics.lending_rate_cv_supply_30d !== undefined ? latestMetrics.lending_rate_cv_supply_30d.toFixed(2) : <NaValue />}</div>
+                                        <div className="metric-cell-sub">Supply CV | Borrow: {latestMetrics.lending_rate_cv_borrow_30d !== null && latestMetrics.lending_rate_cv_borrow_30d !== undefined ? latestMetrics.lending_rate_cv_borrow_30d.toFixed(2) : 'N/A'}</div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Pool Concentration</div>
+                                        <div className="metric-cell-value">{latestMetrics.pool_count_80 != null ? latestMetrics.pool_count_80 : <NaValue note="Pool selection not available" />}</div>
+                                        <div className="metric-cell-sub">Pools for 80% | Top share: {latestMetrics.top_pool_share !== null && latestMetrics.top_pool_share !== undefined ? `${(latestMetrics.top_pool_share * 100).toFixed(0)}%` : 'N/A'}
+                                            {latestMetrics.top_pool_share_total !== null && latestMetrics.top_pool_share_total !== undefined && <span style={{color:'var(--text-muted)'}}> ({(latestMetrics.top_pool_share_total * 100).toFixed(0)}% total)</span>}
+                                        </div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Liquidity Depth</div>
+                                        <div className="metric-cell-value">${formatTVL(current.tvl_usd)}</div>
+                                        <div className="metric-cell-sub">Coverage: <span style={{color: coverageColor(current.coverage_pct)}}>{current.coverage_pct !== null && current.coverage_pct !== undefined ? `${(current.coverage_pct * 100).toFixed(0)}%` : 'N/A'}</span></div>
+                                    </div>
+                                </div>
+                                {/* Metric Field Coverage Bar */}
+                                {(latestMetrics.metric_coverage_util !== null && latestMetrics.metric_coverage_util !== undefined) && (
+                                    <div style={{display:'flex',gap:'24px',padding:'12px 20px',background:'var(--bg-secondary)',border:'1px solid var(--border-color)',marginBottom:'16px',fontSize:'11px',fontFamily:'JetBrains Mono',alignItems:'center'}}>
+                                        <span style={{color:'var(--text-muted)',letterSpacing:'1px',fontSize:'11px',fontWeight:600,textTransform:'uppercase'}}>Pool Field Coverage</span>
+                                        <span>Utilization: <span style={{color: coverageColor(latestMetrics.metric_coverage_util)}}>{(latestMetrics.metric_coverage_util * 100).toFixed(0)}%</span> of selected TVL</span>
+                                        {latestMetrics.metric_coverage_rate !== null && latestMetrics.metric_coverage_rate !== undefined && (
+                                            <span>Rate data: <span style={{color: coverageColor(latestMetrics.metric_coverage_rate)}}>{(latestMetrics.metric_coverage_rate * 100).toFixed(0)}%</span> of selected TVL</span>
+                                        )}
+                                    </div>
+                                )}
+                                </>
+                            )}
+
+                            {/* DEX: 4 cards */}
+                            {category === 'DEX' && (
+                                <div className="grid">
+                                    <div className="metric-card">
+                                        <div className="metric-label">Liquidity Concentration</div>
+                                        <div className="metric-cell-value">{latestMetrics.pool_count_80 != null ? latestMetrics.pool_count_80 : <NaValue note="Pool selection not available" />}</div>
+                                        <div className="metric-cell-sub">Pools for 80% TVL | Top share: {latestMetrics.top_pool_share !== null && latestMetrics.top_pool_share !== undefined ? `${(latestMetrics.top_pool_share * 100).toFixed(0)}%` : 'N/A'}</div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">TVL Momentum</div>
+                                        <div className="metric-cell-value" style={{color: (current.tvl_7d_pct||0) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}}>{current.tvl_7d_pct != null ? formatPercent(current.tvl_7d_pct) : <NaValue note="Insufficient TVL history" />}</div>
+                                        <div className="metric-cell-sub">7D | 30D: {formatPercent(current.tvl_30d_pct)}</div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Chain Concentration</div>
+                                        <div className="metric-cell-value">{current.top_chain_share_pct ? `${current.top_chain_share_pct.toFixed(1)}%` : <NaValue note="Chain breakdown not available" />}</div>
+                                        <div className="metric-cell-sub">{current.top_chain || 'N/A'} | 7D change: {current.top_chain_share_change_7d_pp !== null && current.top_chain_share_change_7d_pp !== undefined ? `${current.top_chain_share_change_7d_pp >= 0 ? '+' : ''}${current.top_chain_share_change_7d_pp.toFixed(1)}pp` : 'N/A'}</div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Liquidity Depth</div>
+                                        <div className="metric-cell-value">${formatTVL(current.tvl_usd)}</div>
+                                        <div className="metric-cell-sub">Coverage: <span style={{color: coverageColor(current.coverage_pct)}}>{current.coverage_pct !== null && current.coverage_pct !== undefined ? `${(current.coverage_pct * 100).toFixed(0)}%` : 'N/A'}</span></div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* LSD: 3 cards */}
+                            {category === 'LSD' && (
+                                <div className="grid-3">
+                                    <div className="metric-card">
+                                        <div className="metric-label">TVL Trend</div>
+                                        <div className="metric-cell-value" style={{color: (current.tvl_7d_pct||0) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}}>{current.tvl_7d_pct != null ? formatPercent(current.tvl_7d_pct) : <NaValue note="Insufficient TVL history" />}</div>
+                                        <div className="metric-cell-sub">7D | 30D: {formatPercent(current.tvl_30d_pct)}</div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Structural Dependence</div>
+                                        <div className="metric-cell-value">{current.top_chain || <NaValue note="Chain breakdown not available" />}</div>
+                                        <div className="metric-cell-sub">{current.top_chain_share_pct ? `${current.top_chain_share_pct.toFixed(1)}% share` : 'N/A'}
+                                            <span style={{marginLeft:'8px',padding:'2px 6px',fontSize:'10px',background:'rgba(170,0,255,0.1)',color:'var(--accent-purple)',border:'1px solid var(--accent-purple)',letterSpacing:'0.5px'}}>STRUCTURAL</span>
+                                        </div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Data Coverage</div>
+                                        <div className="metric-cell-value" style={{color: coverageColor(current.coverage_pct)}}>{current.coverage_pct !== null && current.coverage_pct !== undefined ? `${(current.coverage_pct * 100).toFixed(0)}%` : <NaValue note="Coverage data not computed" />}</div>
+                                        <div className="metric-cell-sub">Pool count: {latestMetrics.pool_count_80 ?? 'N/A'} (structural)</div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* PERP: 3 cards */}
+                            {category === 'PERP' && (
+                                <div className="grid-3">
+                                    <div className="metric-card">
+                                        <div className="metric-label">TVL Trend</div>
+                                        <div className="metric-cell-value" style={{color: (current.tvl_7d_pct||0) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}}>{current.tvl_7d_pct != null ? formatPercent(current.tvl_7d_pct) : <NaValue note="Insufficient TVL history" />}</div>
+                                        <div className="metric-cell-sub">7D | 30D: {formatPercent(current.tvl_30d_pct)}</div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Structural Dependence</div>
+                                        <div className="metric-cell-value">{current.top_chain || <NaValue note="Chain breakdown not available" />}</div>
+                                        <div className="metric-cell-sub">{current.top_chain_share_pct ? `${current.top_chain_share_pct.toFixed(1)}% share` : 'N/A'}
+                                            <span style={{marginLeft:'8px',padding:'2px 6px',fontSize:'10px',background:'rgba(255,170,0,0.1)',color:'var(--accent-yellow)',border:'1px solid var(--accent-yellow)',letterSpacing:'0.5px'}}>STRUCTURAL</span>
+                                        </div>
+                                    </div>
+                                    <div className="metric-card">
+                                        <div className="metric-label">Data Coverage</div>
+                                        <div className="metric-cell-value" style={{color: coverageColor(current.coverage_pct)}}>{current.coverage_pct !== null && current.coverage_pct !== undefined ? `${(current.coverage_pct * 100).toFixed(0)}%` : <NaValue note="Coverage data not computed" />}</div>
+                                        <div className="metric-cell-sub">Pool count: {latestMetrics.pool_count_80 ?? 'N/A'} (structural)</div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Pools Tables (LENDING + DEX) */}
+                        {(category === 'LENDING' || category === 'DEX') && pools.length > 0 && (() => {
+                            const lendingPools = pools.filter(p => p.utilization !== null && p.utilization !== undefined);
+                            const vaultPools = pools.filter(p => p.utilization === null || p.utilization === undefined);
+                            return (<>
+                                {/* Lending Markets (with borrow data) */}
+                                {category === 'LENDING' && lendingPools.length > 0 && (
+                                    <div className="panel">
+                                        <div className="panel-header">
+                                            <div className="panel-title">Lending Markets</div>
+                                            <div className="panel-actions"><span style={{fontSize: '11px', color: 'var(--text-muted)'}}>{lendingPools.length} pools with borrow data</span></div>
+                                        </div>
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Pool</th>
+                                                    <th>Chain</th>
+                                                    <th className="right">TVL</th>
+                                                    <th className="right">Supply APY</th>
+                                                    <th className="right">Borrow APY</th>
+                                                    <th className="right">Utilization</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {lendingPools.map((pool, idx) => (
+                                                    <tr key={idx}>
+                                                        <td><div className="protocol-name">{pool.pool_name || pool.pool_id?.slice(0,20)}</div></td>
+                                                        <td>{pool.chain || '-'}</td>
+                                                        <td className="right">${formatTVL(pool.tvl_usd)}</td>
+                                                        <td className="right" style={{color: 'var(--accent-green)'}}>{pool.supply_apy_total !== null && pool.supply_apy_total !== undefined ? `${pool.supply_apy_total.toFixed(2)}%` : '-'}</td>
+                                                        <td className="right">{pool.borrow_apy_total !== null && pool.borrow_apy_total !== undefined ? `${pool.borrow_apy_total.toFixed(2)}%` : '-'}</td>
+                                                        <td className="right">
+                                                            <span style={{color: pool.utilization >= 0.9 ? 'var(--accent-red)' : pool.utilization >= 0.7 ? 'var(--accent-yellow)' : 'var(--accent-green)'}}>
+                                                                {(pool.utilization * 100).toFixed(1)}%
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* Vaults / Yield Pools (no borrow data) */}
+                                {category === 'LENDING' && vaultPools.length > 0 && (
+                                    <div className="panel">
+                                        <div className="panel-header">
+                                            <div className="panel-title">Vaults / Yield Pools</div>
+                                            <div className="panel-actions"><span style={{fontSize: '11px', color: 'var(--text-muted)'}}>{vaultPools.length} pools — no borrow market</span></div>
+                                        </div>
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Pool</th>
+                                                    <th>Chain</th>
+                                                    <th className="right">TVL</th>
+                                                    <th className="right">Supply APY</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {vaultPools.map((pool, idx) => (
+                                                    <tr key={idx}>
+                                                        <td><div className="protocol-name">{pool.pool_name || pool.pool_id?.slice(0,20)}</div></td>
+                                                        <td>{pool.chain || '-'}</td>
+                                                        <td className="right">${formatTVL(pool.tvl_usd)}</td>
+                                                        <td className="right" style={{color: 'var(--accent-green)'}}>{pool.supply_apy_total !== null && pool.supply_apy_total !== undefined ? `${pool.supply_apy_total.toFixed(2)}%` : '-'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* DEX pools (no borrow columns) */}
+                                {category === 'DEX' && (
+                                    <div className="panel">
+                                        <div className="panel-header">
+                                            <div className="panel-title">Top Pools</div>
+                                            <div className="panel-actions"><span style={{fontSize: '11px', color: 'var(--text-muted)'}}>{pools.length} pools</span></div>
+                                        </div>
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Pool</th>
+                                                    <th>Chain</th>
+                                                    <th className="right">TVL</th>
+                                                    <th className="right">Supply APY</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {pools.slice(0, 30).map((pool, idx) => (
+                                                    <tr key={idx}>
+                                                        <td><div className="protocol-name">{pool.pool_name || pool.pool_id?.slice(0,20)}</div></td>
+                                                        <td>{pool.chain || '-'}</td>
+                                                        <td className="right">${formatTVL(pool.tvl_usd)}</td>
+                                                        <td className="right" style={{color: 'var(--accent-green)'}}>{pool.supply_apy_total !== null && pool.supply_apy_total !== undefined ? `${pool.supply_apy_total.toFixed(2)}%` : '-'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </>);
+                        })()}
+
+                        {/* Top Pools Concentration */}
+                        {(() => {
+                            const ps = detail?.pool_selection;
+                            const t1 = ps?.top1_share_total;
+                            const t5 = ps?.top5_share_total;
+                            const t10 = ps?.top10_share_total;
+                            const totalTvl = ps?.total_pool_tvl_usd;
+                            const pc80 = ps?.pool_count_80;
+                            const topChain = current?.top_chain_share_pct;
+                            const hasData = t1 !== null && t1 !== undefined;
+                            const tp = topPoolsData?.pools || [];
+                            const tpTotal = topPoolsData?.total_pool_tvl || 0;
+
+                            const BarRow = ({label, value, pools: barPools}) => {
+                                const pct = value != null ? (value * 100) : 0;
+                                const barColor = pct >= 80 ? 'var(--accent-red)' : pct >= 50 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+                                // Build tooltip text
+                                const tipLines = barPools.map(p => `${(p.pool_name||'?').slice(0,25)}: $${formatTVL(p.tvl_usd)} (${(p.share*100).toFixed(1)}%)`);
+                                const tip = `${label}: ${pct.toFixed(1)}%\nTotal pool TVL: $${formatTVL(tpTotal)}\n\n${tipLines.join('\n')}`;
+                                return (
+                                    <div style={{marginBottom: '12px'}} title={tip}>
+                                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '4px'}}>
+                                            <span style={{fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'IBM Plex Sans'}}>{label}</span>
+                                            <span style={{fontSize: '12px', fontWeight: 600, color: barColor, fontFamily: 'JetBrains Mono'}}>{value != null ? `${pct.toFixed(1)}%` : 'N/A'}</span>
+                                        </div>
+                                        <div style={{height: '10px', background: 'var(--bg-primary)', borderRadius: '5px', overflow: 'hidden'}}>
+                                            <div style={{width: `${Math.min(pct, 100)}%`, height: '100%', background: barColor, borderRadius: '5px', transition: 'width 0.5s ease'}}></div>
+                                        </div>
+                                    </div>
+                                );
+                            };
+
+                            return (
+                                <div className="panel">
+                                    <div className="panel-header">
+                                        <div className="panel-title">Top Pools Concentration</div>
+                                        <div className="panel-actions" style={{display: 'flex', gap: '8px'}}>
+                                            {pc80 != null && <span style={{fontSize: '11px', padding: '3px 8px', background: 'rgba(0,170,255,0.1)', color: '#00aaff', borderRadius: '3px', fontFamily: 'JetBrains Mono'}}>P80: {pc80} pools</span>}
+                                            {topChain != null && <span style={{fontSize: '11px', padding: '3px 8px', background: 'rgba(170,0,255,0.1)', color: '#aa00ff', borderRadius: '3px', fontFamily: 'JetBrains Mono'}}>Chain: {topChain.toFixed(0)}%</span>}
+                                        </div>
+                                    </div>
+                                    {hasData ? (
+                                        <div style={{padding: '16px 20px'}}>
+                                            <BarRow label="Top 1 Pool" value={t1} pools={tp.slice(0,1)} />
+                                            <BarRow label="Top 5 Pools" value={t5} pools={tp.slice(0,5)} />
+                                            <BarRow label="Top 10 Pools" value={t10} pools={tp.slice(0,10)} />
+                                            <div style={{fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono', marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px'}}>
+                                                Computed from pool universe ({totalTvl ? `$${formatTVL(totalTvl)} total` : 'all pools'} for this protocol from yields pools endpoint). Hover bars for pool breakdown.
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px'}}>No pool data</div>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
+                        {/* Active Alerts with Risk Flags — grouped by alert_type */}
+                        {detail?.alerts && detail.alerts.length > 0 && (() => {
+                            // Group alerts by alert_type, keep latest first
+                            const grouped = {};
+                            detail.alerts.forEach(a => {
+                                if (!grouped[a.alert_type]) grouped[a.alert_type] = [];
+                                grouped[a.alert_type].push(a);
+                            });
+                            const groups = Object.entries(grouped).map(([type, items]) => ({
+                                type,
+                                latest: items[0],
+                                count: items.length,
+                                history: items.slice(1)
+                            })).sort((a, b) => (b.latest.points||0) - (a.latest.points||0));
+
+                            return (
+                                <div className="panel">
+                                    <div className="panel-header">
+                                        <div className="panel-title">Active Risk Alerts (14D)</div>
+                                        <div className="panel-actions"><span style={{fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono'}}>{detail.alerts.length} occurrence{detail.alerts.length !== 1 ? 's' : ''} across {groups.length} alert type{groups.length !== 1 ? 's' : ''}</span></div>
+                                    </div>
+                                    <div style={{display: 'grid', gap: '12px'}}>
+                                        {groups.map((g, gi) => (
+                                            <AlertGroup key={gi} group={g} />
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Risk Score Breakdown */}
+                        {latestMetrics.risk_flags && Object.keys(latestMetrics.risk_flags).length > 0 && (
+                            <div className="panel">
+                                <div className="panel-header">
+                                    <div className="panel-title">Risk Score Attribution</div>
+                                    <div className="panel-actions"><span style={{fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono'}}>{latestMetrics.date || 'latest'}</span></div>
+                                </div>
+                                <div className="risk-calc">
+                                    {Object.entries(latestMetrics.risk_flags)
+                                        .filter(([k, v]) => !k.startsWith('_') && v.points > 0)
+                                        .sort((a, b) => (b[1].points||0) - (a[1].points||0))
+                                        .map(([flag, info]) => (
+                                        <div className="calc-line" key={flag}>
+                                            <span className="calc-condition">{flag} ({(info.severity||'').toUpperCase()})</span>
+                                            <span className="calc-value">+{info.points} pts</span>
+                                        </div>
+                                    ))}
+                                    {/* Show 0-point info flags */}
+                                    {Object.entries(latestMetrics.risk_flags)
+                                        .filter(([k, v]) => !k.startsWith('_') && v.points === 0)
+                                        .map(([flag, info]) => (
+                                        <div className="calc-line" key={flag} style={{opacity: 0.5}}>
+                                            <span className="calc-condition">{flag} (INFO)</span>
+                                            <span className="calc-value" style={{color: 'var(--text-muted)'}}>0 pts</span>
+                                        </div>
+                                    ))}
+                                    {/* Show guardrail adjustments */}
+                                    {latestMetrics.risk_flags._METRIC_COVERAGE_GUARDRAIL?.applied && (
+                                        <div className="calc-line" style={{borderTop: '1px dashed var(--border-color)', marginTop: '8px', paddingTop: '8px'}}>
+                                            <span className="calc-condition" style={{color: 'var(--accent-yellow)'}}>Metric Coverage Guardrail (×0.7 lending pts)</span>
+                                            <span className="calc-value" style={{color: 'var(--accent-yellow)'}}>Util coverage {((latestMetrics.risk_flags._METRIC_COVERAGE_GUARDRAIL.metric_coverage_util||0)*100).toFixed(0)}% &lt; 50%</span>
+                                        </div>
+                                    )}
+                                    {latestMetrics.risk_flags._COVERAGE_GUARDRAIL?.applied && (
+                                        <div className="calc-line" style={{borderTop: '1px dashed var(--border-color)', marginTop: '8px', paddingTop: '8px'}}>
+                                            <span className="calc-condition" style={{color: 'var(--accent-yellow)'}}>Low Coverage Guardrail (×0.7 lending pts)</span>
+                                            <span className="calc-value" style={{color: 'var(--accent-yellow)'}}>Coverage {((latestMetrics.risk_flags._COVERAGE_GUARDRAIL.coverage_pct||0)*100).toFixed(0)}% &lt; 50%</span>
+                                        </div>
+                                    )}
+                                    <div className="calc-line">
+                                        <span className="calc-condition">Total Risk Score</span>
+                                        <span className="calc-value">{current.risk_score ?? 0}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </>)}
+                </div>
+            );
+        };
+
+        // ============================================================
+        // Daily Brief Page
+        // ============================================================
+        const DailyBriefPage = () => {
+            const [brief, setBrief] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+            const initialLoad = useRef(true);
+            useEffect(() => {
+                if (initialLoad.current) {
+                    initialLoad.current = false;
+                    fetchBrief('__latest__');
+                } else {
+                    fetchBrief();
+                }
+            }, [selectedDate]);
+
+            const fetchBrief = async (dateOverride) => {
+                setLoading(true);
+                try {
+                    const useDate = dateOverride || selectedDate;
+                    const url = dateOverride === '__latest__'
+                        ? `${API_BASE}/daily-brief`
+                        : `${API_BASE}/daily-brief?date=${useDate}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    setBrief(data);
+                    if (data.date && data.date !== selectedDate) {
+                        setSelectedDate(data.date);
+                    }
+                } catch (err) {
+                    console.error('Error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const exportMarkdown = async () => {
+                if (!brief) return;
+
+                // Fetch overview for protocol list + coverage data
+                let overviewData = [];
+                try {
+                    const res = await fetch(`${API_BASE}/overview`);
+                    overviewData = await res.json();
+                } catch (e) { /* proceed without */ }
+
+                let md = `# Protocol Health Monitor — Daily Risk Brief\n\n`;
+                md += `**Date:** ${brief.date}  \n`;
+                md += `**Generated:** ${new Date().toISOString().slice(0,16).replace('T',' ')}  \n\n`;
+
+                // Protocol roster
+                if (overviewData.length > 0) {
+                    md += `## Monitored Protocols\n\n`;
+                    md += `| Protocol | Category | TVL | Risk Score |\n`;
+                    md += `|----------|----------|-----|------------|\n`;
+                    overviewData.sort((a,b) => (b.tvl_usd||0) - (a.tvl_usd||0)).forEach(p => {
+                        const tvl = p.tvl_usd ? `$${(p.tvl_usd/1e9).toFixed(2)}B` : 'N/A';
+                        md += `| ${p.name} | ${p.category} | ${tvl} | ${p.risk_score ?? 'N/A'} |\n`;
+                    });
+                    md += `\n`;
+                }
+
+                // Summary
+                md += `## Alert Summary\n\n`;
+                md += `| Metric | Count |\n`;
+                md += `|--------|-------|\n`;
+                md += `| Total Alerts | ${brief.summary?.total_alerts || 0} |\n`;
+                md += `| Protocols Affected | ${brief.summary?.protocols_with_alerts || 0} |\n`;
+                md += `| Critical | ${brief.summary?.crit_count || 0} |\n`;
+                md += `| High | ${brief.summary?.high_count || 0} |\n`;
+                md += `| Medium | ${brief.summary?.med_count || 0} |\n`;
+                md += `| Low | ${brief.summary?.low_count || 0} |\n\n`;
+
+                // Active alerts
+                const activeAlerts = (brief.alerts || []).filter(a => a.points > 0);
+                const infoFlags = (brief.alerts || []).filter(a => a.points === 0);
+
+                if (activeAlerts.length > 0) {
+                    md += `## Active Alerts\n\n`;
+                    activeAlerts.forEach((alert, i) => {
+                        const sev = (alert.severity || '').toUpperCase();
+                        md += `### ${i + 1}. ${alert.protocol_name} — ${alert.alert_type} [${sev}] (+${alert.points}pts)\n\n`;
+                        md += `- **Category:** ${alert.category}\n`;
+                        md += `- **Message:** ${alert.message}\n\n`;
+                    });
+                }
+
+                // Data quality section
+                md += `## Data Quality\n\n`;
+                if (overviewData.length > 0) {
+                    const lowCov = overviewData.filter(p => p.coverage_pct !== null && p.coverage_pct < 0.5);
+                    const avgCov = overviewData.filter(p => p.coverage_pct != null);
+                    const avgCovPct = avgCov.length > 0 ? (avgCov.reduce((s,p) => s + p.coverage_pct, 0) / avgCov.length * 100).toFixed(0) : 'N/A';
+                    md += `- **Average Coverage:** ${avgCovPct}%\n`;
+                    if (lowCov.length > 0) {
+                        md += `- **Low Coverage (< 50%):** ${lowCov.map(p => p.name).join(', ')}\n`;
+                    } else {
+                        md += `- **Low Coverage:** None\n`;
+                    }
+                }
+                if (infoFlags.length > 0) {
+                    md += `- **Data Incomplete Flags:**\n`;
+                    infoFlags.forEach(f => {
+                        md += `  - ${f.protocol_name}: ${f.alert_type} — ${f.message}\n`;
+                    });
+                } else {
+                    md += `- **Data Incomplete Flags:** None\n`;
+                }
+                md += `\n---\n*Generated by Protocol Health Monitor*\n`;
+
+                const blob = new Blob([md], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `risk-brief-${brief.date}.md`;
+                a.click();
+            };
+
+            if (loading || !brief) {
+                return (<div className="loading-container"><div className="spinner"></div><div>Loading daily brief...</div></div>);
+            }
+
+            const s = brief.summary || {};
+
+            return (
+                <div className="container">
+                    {/* Top Tiles */}
+                    <div className="grid-5">
+                        <div className="metric-card">
+                            <div className="metric-label">Total Alerts</div>
+                            <div className="metric-value">{s.total_alerts || 0}</div>
+                            <div className="metric-change change-neutral"><span style={{color: 'var(--text-muted)'}}>{s.protocols_with_alerts || 0} protocols</span></div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="metric-label">Critical</div>
+                            <div className="metric-value" style={{color: 'var(--accent-crit)'}}>{s.crit_count || 0}</div>
+                            <div className="metric-change change-negative">Immediate action</div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="metric-label">High Severity</div>
+                            <div className="metric-value" style={{color: 'var(--accent-red)'}}>{s.high_count || 0}</div>
+                            <div className="metric-change change-negative">Attention needed</div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="metric-label">Medium</div>
+                            <div className="metric-value" style={{color: 'var(--accent-yellow)'}}>{s.med_count || 0}</div>
+                            <div className="metric-change change-neutral">Monitor</div>
+                        </div>
+                        <div className="metric-card">
+                            <div className="metric-label">Coverage Issues</div>
+                            <div className="metric-value">{s.coverage_issues || 0}</div>
+                            <div className="metric-change change-neutral"><span style={{color: 'var(--text-muted)'}}>LOW_COVERAGE + DATA_GAP</span></div>
+                        </div>
+                    </div>
+
+                    {/* Alert Details Table */}
+                    <div className="panel">
+                        <div className="panel-header">
+                            <div className="panel-title">Alert Details - {selectedDate}</div>
+                            <div className="panel-actions">
+                                <input type="date" className="btn" style={{padding: '6px 12px'}} value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+                                <button className="btn" onClick={exportMarkdown}>Export MD</button>
+                            </div>
+                        </div>
+
+                        {brief.alerts.length === 0 ? (
+                            <div style={{padding: '60px', textAlign: 'center'}}>
+                                <div style={{fontSize: '48px', marginBottom: '16px'}}>OK</div>
+                                <div style={{fontSize: '18px', color: 'var(--accent-green)', marginBottom: '8px'}}>No Alerts</div>
+                                <div style={{fontSize: '13px', color: 'var(--text-secondary)'}}>All protocols operating within normal parameters</div>
+                            </div>
+                        ) : (
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{width: '40px'}}>#</th>
+                                        <th>Protocol</th>
+                                        <th>Category</th>
+                                        <th>Alert Type</th>
+                                        <th className="center">Severity</th>
+                                        <th className="right">Points</th>
+                                        <th>Message</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {brief.alerts.map((alert, idx) => (
+                                        <tr key={idx}>
+                                            <td style={{color: 'var(--text-muted)', fontWeight: 700}}>{idx + 1}</td>
+                                            <td><div className="protocol-name">{alert.protocol_name}</div></td>
+                                            <td><span className={`category-badge ${getCategoryClass(alert.category)}`}>{(alert.category||'').toUpperCase()}</span></td>
+                                            <td style={{fontFamily: 'JetBrains Mono', fontSize: '11px'}}>{alert.alert_type}</td>
+                                            <td className="center">
+                                                <span className={`risk-score ${getSeverityClass(alert.severity)}`} style={{fontSize: '11px', padding: '4px 8px'}}>
+                                                    {(alert.severity||'').toUpperCase()}
+                                                </span>
+                                            </td>
+                                            <td className="right" style={{fontFamily: 'JetBrains Mono'}}>+{alert.points || 0}</td>
+                                            <td style={{fontFamily: 'IBM Plex Sans', fontSize: '13px'}}>{alert.message}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // ============================================================
+        // App Shell
+        // ============================================================
+        const App = () => {
+            const [currentPage, setCurrentPage] = useState('overview');
+
+            return (
+                <div style={{minHeight: '100vh', background: 'var(--bg-primary)'}}>
+                    <div className="header">
+                        <div className="header-content">
+                            <div className="header-left">
+                                <div className="title">Protocol Health Monitor</div>
+                                <div className="live-indicator">
+                                    <span className="live-dot"></span>
+                                    <span>LIVE</span>
+                                </div>
+                            </div>
+                            <div className="nav">
+                                <a className={currentPage === 'overview' ? 'active' : ''} onClick={() => setCurrentPage('overview')}>Overview</a>
+                                <a className={currentPage === 'detail' ? 'active' : ''} onClick={() => setCurrentPage('detail')}>Analytics</a>
+                                <a className={currentPage === 'brief' ? 'active' : ''} onClick={() => setCurrentPage('brief')}>Risk Brief</a>
+                            </div>
+                        </div>
+                    </div>
+                    {currentPage === 'overview' && <OverviewPage />}
+                    {currentPage === 'detail' && <ProtocolDetailPage />}
+                    {currentPage === 'brief' && <DailyBriefPage />}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

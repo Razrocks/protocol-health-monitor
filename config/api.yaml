@@ -1,0 +1,26 @@
+# Protocol Health Monitor - API Endpoint Configuration
+# All external API URLs are defined here. Never hardcode endpoints elsewhere.
+
+endpoints:
+  # Protocol-level TVL and chain breakdown
+  # Usage: protocol_tvl.format(slug="aave-v3")
+  protocol_tvl: "https://api.llama.fi/protocol/{slug}"
+
+  # Yields pools snapshot (all pools, single call)
+  yields_pools: "https://yields.llama.fi/pools"
+
+  # Pool history (lend/borrow time series per pool)
+  # Usage: pool_history.format(pool_id="some-pool-uuid")
+  pool_history: "https://yields.llama.fi/chartLendBorrow/{pool_id}"
+
+  # Protocol fees summary (optional, existing feature)
+  protocol_fees: "https://api.llama.fi/summary/fees/{slug}"
+
+# Rate limiting
+rate_limit:
+  delay_seconds: 0.5
+  max_pool_history_fetch: 25  # Max pools to fetch history for per protocol
+
+# Pool selection
+pool_selection:
+  cumulative_tvl_threshold: 0.80  # Select pools until 80% of total pool TVL

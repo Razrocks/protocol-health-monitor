@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: public
+    schema: public
+    tables:
+      - name: protocols
+      - name: ingestion_runs
+      - name: raw_protocol_snapshots
+      - name: protocol_tvl_daily
+      - name: protocol_chain_tvl_daily
+      - name: protocol_metrics_daily
+      - name: alerts_daily
