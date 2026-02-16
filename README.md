@@ -4,7 +4,7 @@ Category-aware DeFi risk monitor for 6 major protocols using the **DeFiLlama API
 
 ## What it does
 
-Daily answers:
+Daily checks (auto refreshes ever 5 mins - ability to force refresh most recent data):
 
 - Is protocol TVL breaking down (1D, 7D, 30D)?
 - Is value concentrating on one chain (and is that shifting fast)?
@@ -18,9 +18,9 @@ Outputs:
 - Protocol detail pages (category-specific)
 - Daily risk brief (Markdown export)
 
-## Monitored protocols (v1)
+## Monitored protocols
 
-| Protocol | Category | What is monitored |
+| Protocol | Category | monitored |
 |---|---|---|
 | Aave V3 | Lending | Utilization, rate spread and volatility, pool concentration, chain share, TVL momentum |
 | Sky | Lending | Same when data is available |
@@ -137,7 +137,3 @@ GET /api/tvl-history?days=N
 GET /api/alert-drivers
 
 GET /api/daily-brief?date=YYYY-MM-DD
-
-## License
-
-MIT License - See LICENSE file
