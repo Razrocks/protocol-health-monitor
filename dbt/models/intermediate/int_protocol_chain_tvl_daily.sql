@@ -4,9 +4,6 @@
   )
 }}
 
--- Chain TVL breakdown from raw snapshots
--- Already parsed by ingestion script
-
 SELECT
     date,
     protocol_id,

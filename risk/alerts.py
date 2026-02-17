@@ -1,13 +1,6 @@
 """
-Alert generation engine (Step I, part 1)
+Alert generation engine.
 Evaluates all alert rules against protocol metrics and generates alert records.
-
-Key changes from v1:
-- Materiality gating: pool-level alerts only fire at MED+ if the pool is material
-  (>= 5% of selected TVL or >= $250M). Non-material triggers -> INFO/LOW, capped at +5 pts.
-- Spread replaces ratio as primary rate alert (ratio blows up when supply ~ 0)
-- Null metrics never trigger utilization/spread alerts (DATA_INCOMPLETE flags instead)
-- Chain concentration for LSD/PERP labeled "Structural Dependence" (not incident)
 """
 from risk.metrics import (
     get_metric, has_lending_data, has_rate_data, has_volatility_data,
@@ -16,7 +9,6 @@ from risk.metrics import (
     worst_material_util_pool, worst_material_spread_pool,
     is_structural_chain_category,
 )
-
 
 def _fmt_tvl(tvl):
     """Format TVL for messages"""
@@ -29,7 +21,6 @@ def _fmt_tvl(tvl):
     if tvl >= 1e3:
         return f'${tvl/1e3:.0f}K'
     return f'${tvl:.0f}'
-
 
 def generate_alerts(protocol_id, category, metrics):
     """Generate all applicable alerts for a protocol.
@@ -44,10 +35,6 @@ def generate_alerts(protocol_id, category, metrics):
     """
     name = metrics.get('protocol_name', f'Protocol {protocol_id}')
     triggered = []
-
-    # ================================================================
-    # GLOBAL ALERTS (all categories)
-    # ================================================================
 
     # TVL drops (7d supersedes 1d)
     tvl_7d = metrics.get('tvl_7d_pct')
@@ -132,9 +119,6 @@ def generate_alerts(protocol_id, category, metrics):
             'message': f"{name} pool coverage is {coverage:.1%} (below 50%)",
         })
 
-    # ================================================================
-    # LENDING-ONLY ALERTS (with materiality gating)
-    # ================================================================
     if category != 'LENDING':
         # Non-lending: pool concentration (only for LENDING/DEX)
         if category == 'DEX':
@@ -150,9 +134,7 @@ def generate_alerts(protocol_id, category, metrics):
                 })
         return triggered
 
-    # --- Lending category from here ---
-
-    # Metric coverage check — if a required metric is NULL, flag it but don't alert
+    # Metric coverage check â€” if a required metric is NULL, flag it but don't alert
     metric_cov_util = metrics.get('metric_coverage_util')
     metric_cov_rate = metrics.get('metric_coverage_rate')
     low_metric_coverage = (metric_cov_util is not None and metric_cov_util < 0.5)
@@ -177,7 +159,6 @@ def generate_alerts(protocol_id, category, metrics):
             'message': f"{name} rate spread data unavailable from source",
         })
 
-    # --- Utilization alerts (MATERIAL pools only) ---
     util_avg = metrics.get('lending_util_avg')
     mat_util = max_material_util(metrics)
     worst_util_pool = worst_material_util_pool(metrics)
@@ -200,7 +181,7 @@ def generate_alerts(protocol_id, category, metrics):
                 sev = 'crit'
                 pts = 40
             else:
-                # Large TVL but low share — MED, reduced points
+                # Large TVL but low share â€” MED, reduced points
                 sev = 'med'
                 pts = 15
             triggered.append({
@@ -231,11 +212,10 @@ def generate_alerts(protocol_id, category, metrics):
                 'points': 5,
                 'value': d['utilization'],
                 'threshold': 0.90,
-                'message': f"Tail pool spike: {d['pool_name']} util {d['utilization']:.1%} (tvl {_fmt_tvl(d['tvl'])}, share {d['pool_share']:.1%}) — non-material",
+                'message': f"Tail pool spike: {d['pool_name']} util {d['utilization']:.1%} (tvl {_fmt_tvl(d['tvl'])}, share {d['pool_share']:.1%}) â€” non-material",
             })
             break  # Only one tail alert per run
 
-    # --- Rate spread alerts (replaces ratio) ---
     mat_spread = max_material_spread(metrics)
     worst_spread_pool = worst_material_spread_pool(metrics)
 
@@ -265,7 +245,6 @@ def generate_alerts(protocol_id, category, metrics):
                 'message': f"RATE_SPREAD_STRESS on {pool_name}: {mat_spread:.2f}pp spread (tvl {_fmt_tvl(pool_tvl)}, share {pool_share:.1%})",
             })
 
-    # --- Rate volatility ---
     if has_volatility_data(metrics):
         cv = max_rate_cv(metrics)
         if cv >= 1.0:

@@ -108,7 +108,6 @@ class PostgresLoader:
             print(f"No valid TVL records for protocol {protocol_id}")
             return
         
-        # Insert one by one to handle conflicts properly
         with self.conn.cursor() as cur:
             for record in records:
                 cur.execute(
@@ -139,7 +138,6 @@ class PostgresLoader:
             print(f"No chain TVL data for protocol {protocol_id}")
             return
         
-        # Insert one by one to handle conflicts properly
         with self.conn.cursor() as cur:
             for record in records:
                 cur.execute(

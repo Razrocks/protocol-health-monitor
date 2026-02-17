@@ -19,16 +19,10 @@ from collections import defaultdict
 import requests
 import yaml
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API_CONFIG = os.path.join(ROOT, "config", "api.yaml")
 PROTO_CONFIG = os.path.join(ROOT, "config", "protocols.yaml")
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def load_yaml(path: str) -> dict:
     with open(path, "r") as f:
@@ -41,7 +35,6 @@ def fetch_pools(api_url: str) -> list[dict]:
     resp = requests.get(api_url, timeout=60)
     resp.raise_for_status()
     payload = resp.json()
-    # The response is {"status": "success", "data": [...]}
     pools = payload.get("data", payload) if isinstance(payload, dict) else payload
     print(f"  Got {len(pools)} pools")
     return pools
@@ -69,7 +62,6 @@ def search_projects(pools: list[dict], query: str) -> list[tuple[str, dict]]:
         for name, meta in proj_info.items()
         if query_lower in name.lower()
     ]
-    # Sort by total TVL descending
     matches.sort(key=lambda x: x[1]["total_tvl"], reverse=True)
     return matches
 
@@ -101,9 +93,6 @@ def print_matches(matches: list[tuple[str, dict]], header: str = "Results"):
     print(sep + "\n")
 
 
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
 
 def cmd_auto_discover(pools: list[dict]):
     """For each protocol in protocols.yaml, search for matching yields projects."""
@@ -126,7 +115,6 @@ def cmd_auto_discover(pools: list[dict]):
         print(f"\n  Protocol: {name}  (slug: {slug})")
         if not needs_update:
             print(f"  [OK] Already configured: yields_project = \"{current}\"")
-            # Verify it actually exists
             proj_info = unique_projects(pools)
             if current in proj_info:
                 meta = proj_info[current]
@@ -135,9 +123,7 @@ def cmd_auto_discover(pools: list[dict]):
                 print(f"    [!] WARNING: \"{current}\" not found in yields API!")
             continue
 
-        # Search using the protocol name and slug
         search_terms = [name, slug.replace("-", " ")]
-        # Also try individual words from the name
         for word in name.split():
             if len(word) > 2 and word.lower() not in ("v3", "v4", "the"):
                 search_terms.append(word)
@@ -152,7 +138,6 @@ def cmd_auto_discover(pools: list[dict]):
 
         if matches:
             print_matches(matches, header=f"Candidates for {name}")
-            # Suggest top match
             top_name = matches[0][0]
             suggestions[name] = top_name
             print(f"  -> Suggested: yields_project = \"{top_name}\"")
@@ -200,9 +185,6 @@ def cmd_export_json(pools: list[dict], output_path: str):
     print(f"\n  Exported {len(export)} projects to {output_path}\n")
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(
@@ -223,11 +205,9 @@ Examples:
 
     args = parser.parse_args()
 
-    # Load API config for endpoint URL
     api_cfg = load_yaml(API_CONFIG)
     yields_url = api_cfg.get("endpoints", {}).get("yields_pools", "https://yields.llama.fi/pools")
 
-    # Fetch pools (one call, shared across commands)
     pools = fetch_pools(yields_url)
 
     if args.search:

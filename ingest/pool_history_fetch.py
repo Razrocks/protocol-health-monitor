@@ -1,6 +1,6 @@
 """
-Pool history fetcher for lending protocols (Step F)
-Fetches lend/borrow time series for top pools of LENDING protocols
+Pool history fetcher for lending protocols.
+Fetches lend/borrow time series for top pools of LENDING protocols.
 """
 import time
 import requests
@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 
 def fetch_lending_pool_history(conn, run_id, api_config, protocols_config, pool_selections):
-    """Step F: Fetch pool history for rate volatility computation (LENDING only)"""
+    """Fetch pool history for rate volatility computation (LENDING only)."""
 
     url_template = api_config['endpoints']['pool_history']
     delay = api_config.get('rate_limit', {}).get('delay_seconds', 0.5)

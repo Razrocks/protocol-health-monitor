@@ -26,20 +26,17 @@ PROTOCOLS = [
 def fetch_protocol_fees_history(slug, days=30):
     """Fetch historical fees data for a protocol from DeFiLlama"""
     try:
-        # DeFiLlama fees history endpoint
         url = f'https://api.llama.fi/summary/fees/{slug}?dataType=dailyFees'
         response = requests.get(url, timeout=15)
         response.raise_for_status()
         data = response.json()
         
-        # Get today's summary for current values
         summary_url = f'https://api.llama.fi/summary/fees/{slug}'
         summary_response = requests.get(summary_url, timeout=10)
         summary = summary_response.json() if summary_response.ok else {}
         
         historical_data = []
         
-        # Parse historical data
         if 'totalDataChart' in data:
             for entry in data['totalDataChart']:
                 # Entry format: [timestamp, fees]
@@ -57,7 +54,6 @@ def fetch_protocol_fees_history(slug, days=30):
                     'users_24h': None
                 })
         
-        # If no historical data, use current day summary
         if not historical_data and summary:
             today = datetime.now().date()
             historical_data.append({
@@ -79,7 +75,6 @@ def load_fees_to_db():
     cur = conn.cursor()
     
     try:
-        # Get protocol IDs
         cur.execute("SELECT protocol_id, slug FROM protocols WHERE enabled = true")
         protocol_map = {row[1]: row[0] for row in cur.fetchall()}
         
@@ -100,7 +95,6 @@ def load_fees_to_db():
             protocol_id = protocol_map[slug]
             records_inserted = 0
             
-            # Insert all historical data
             for entry in fees_history:
                 cur.execute("""
                     INSERT INTO protocol_fees (protocol_id, date, fees_24h, revenue_24h, users_24h)

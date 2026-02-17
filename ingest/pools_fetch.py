@@ -1,6 +1,6 @@
 """
-Pool data fetcher, mapper, and selector (Steps C + D + E)
-Fetches all pools from yields API, maps to monitored protocols, selects top pools
+Pool data fetcher, mapper, and selector.
+Fetches all pools from yields API, maps to monitored protocols, selects top pools.
 """
 import json
 import time
@@ -12,7 +12,7 @@ from psycopg2.extras import Json
 
 
 def fetch_pools(session, api_config):
-    """Step C: Fetch all pools from yields API"""
+    """Fetch all pools from yields API."""
     url = api_config['endpoints']['yields_pools']
     print(f"  Fetching pools from {url}...")
 
@@ -78,7 +78,7 @@ def _to_decimal(value):
 
 
 def map_and_store_pools(conn, run_id, raw_data, protocols_config):
-    """Step D: Map pools to monitored protocols and store in pools_current"""
+    """Map pools to monitored protocols and store in pools_current."""
 
     # Build yields_project -> protocol_id lookup
     project_to_protocol = {}
@@ -140,7 +140,7 @@ def map_and_store_pools(conn, run_id, raw_data, protocols_config):
 
 
 def select_top_pools(conn, run_id, protocols_config, api_config):
-    """Step E: For each protocol, select pools until 80% cumulative TVL reached"""
+    """Select pools per protocol until 80% cumulative TVL reached."""
 
     threshold = api_config.get('pool_selection', {}).get('cumulative_tvl_threshold', 0.80)
     today = date.today()

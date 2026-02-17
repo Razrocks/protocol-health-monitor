@@ -4,10 +4,6 @@
   )
 }}
 
--- Canonical daily TVL series from raw snapshots
--- This is already parsed and loaded by the ingestion script,
--- so we just select and validate it here
-
 SELECT
     date,
     protocol_id,

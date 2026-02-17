@@ -13,7 +13,7 @@ endpoints:
   # Usage: pool_history.format(pool_id="some-pool-uuid")
   pool_history: "https://yields.llama.fi/chartLendBorrow/{pool_id}"
 
-  # Protocol fees summary (optional, existing feature)
+  # Protocol fees summary
   protocol_fees: "https://api.llama.fi/summary/fees/{slug}"
 
 # Rate limiting

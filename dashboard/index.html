@@ -498,9 +498,6 @@
         Chart.defaults.font.size = 12;
         Chart.defaults.color = '#999999';
 
-        // ============================================================
-        // Utility Functions
-        // ============================================================
         const formatTVL = (tvl) => {
             if (!tvl && tvl !== 0) return '-';
             if (tvl >= 1e9) return `${(tvl / 1e9).toFixed(2)}B`;
@@ -546,7 +543,6 @@
             return 'var(--accent-red)';
         };
 
-        // Reusable N/A indicator with explanation
         const NaValue = ({ note }) => (
             <span style={{cursor:'help'}}>
                 <span style={{color:'var(--text-muted)'}}>N/A</span>
@@ -554,9 +550,6 @@
             </span>
         );
 
-        // ============================================================
-        // Risk Score Methodology (Collapsible)
-        // ============================================================
         const MethodologyDropdown = () => {
             const [open, setOpen] = useState(false);
             return (
@@ -601,9 +594,6 @@
             );
         };
 
-        // ============================================================
-        // Overview Page
-        // ============================================================
         const OverviewPage = () => {
             const [protocols, setProtocols] = useState([]);
             const [tvlHistory, setTvlHistory] = useState([]);
@@ -640,12 +630,10 @@
                 return () => clearInterval(countdown);
             }, [autoRefresh]);
 
-            // Re-fetch TVL history when timeRange changes
             useEffect(() => {
                 if (protocols.length > 0) fetchTvlHistory(timeRange);
             }, [timeRange]);
 
-            // Re-render TVL chart when tvlHistory, tvlMode, or protocols change
             useEffect(() => {
                 if (tvlHistory.length > 0 && tvlChartRef.current) {
                     setTimeout(() => renderTvlChart(), 50);
@@ -653,7 +641,6 @@
                 return () => { if (tvlChartInstance.current) tvlChartInstance.current.destroy(); };
             }, [tvlHistory, tvlMode]);
 
-            // Render drivers + concentration charts after loading completes and canvases are in DOM
             useEffect(() => {
                 if (loading || protocols.length === 0) return;
                 const t1 = setTimeout(() => {
@@ -679,7 +666,6 @@
                     setProtocols(overviewData);
                     setAlertDrivers(driversData);
                     setLastUpdate(new Date());
-                    // Fetch TVL history for current range
                     fetchTvlHistory(timeRange);
                 } catch (err) {
                     console.error('Error fetching overview:', err);
@@ -706,21 +692,18 @@
 
                 const colors = ['#00aaff', '#aa00ff', '#00ff88', '#ffaa00', '#ff3366', '#66ffcc'];
 
-                // Group by protocol
                 const byProtocol = {};
                 tvlHistory.forEach(row => {
                     if (!byProtocol[row.name]) byProtocol[row.name] = [];
                     byProtocol[row.name].push({ date: row.date, tvl: row.tvl_usd });
                 });
 
-                // Get sorted unique dates
                 const allDates = [...new Set(tvlHistory.map(r => r.date))].sort();
                 // Thin out labels for readability
                 const maxLabels = timeRange <= 30 ? allDates.length : timeRange <= 90 ? 15 : 12;
                 const labelStep = Math.max(1, Math.floor(allDates.length / maxLabels));
                 const labels = allDates.map((d, i) => i % labelStep === 0 || i === allDates.length - 1 ? d.slice(5) : '');
 
-                // Sort protocols by latest TVL desc
                 const protocolNames = Object.keys(byProtocol).sort((a, b) => {
                     const aLast = byProtocol[a][byProtocol[a].length - 1]?.tvl || 0;
                     const bLast = byProtocol[b][byProtocol[b].length - 1]?.tvl || 0;
@@ -1165,10 +1148,6 @@
             );
         };
 
-        // ============================================================
-        // Protocol Detail Page (Category-Aware)
-        // ============================================================
-        // AlertGroup: collapsible grouped alert with occurrence count
         const AlertGroup = ({ group }) => {
             const [expanded, setExpanded] = useState(false);
             const a = group.latest;
@@ -1699,9 +1678,6 @@
             );
         };
 
-        // ============================================================
-        // Daily Brief Page
-        // ============================================================
         const DailyBriefPage = () => {
             const [brief, setBrief] = useState(null);
             const [loading, setLoading] = useState(true);
@@ -1740,7 +1716,6 @@
             const exportMarkdown = async () => {
                 if (!brief) return;
 
-                // Fetch overview for protocol list + coverage data
                 let overviewData = [];
                 try {
                     const res = await fetch(`${API_BASE}/overview`);
@@ -1751,7 +1726,6 @@
                 md += `**Date:** ${brief.date}  \n`;
                 md += `**Generated:** ${new Date().toISOString().slice(0,16).replace('T',' ')}  \n\n`;
 
-                // Protocol roster
                 if (overviewData.length > 0) {
                     md += `## Monitored Protocols\n\n`;
                     md += `| Protocol | Category | TVL | Risk Score |\n`;
@@ -1763,7 +1737,6 @@
                     md += `\n`;
                 }
 
-                // Summary
                 md += `## Alert Summary\n\n`;
                 md += `| Metric | Count |\n`;
                 md += `|--------|-------|\n`;
@@ -1774,7 +1747,6 @@
                 md += `| Medium | ${brief.summary?.med_count || 0} |\n`;
                 md += `| Low | ${brief.summary?.low_count || 0} |\n\n`;
 
-                // Active alerts
                 const activeAlerts = (brief.alerts || []).filter(a => a.points > 0);
                 const infoFlags = (brief.alerts || []).filter(a => a.points === 0);
 
@@ -1788,7 +1760,6 @@
                     });
                 }
 
-                // Data quality section
                 md += `## Data Quality\n\n`;
                 if (overviewData.length > 0) {
                     const lowCov = overviewData.filter(p => p.coverage_pct !== null && p.coverage_pct < 0.5);
@@ -1909,9 +1880,6 @@
             );
         };
 
-        // ============================================================
-        // App Shell
-        // ============================================================
         const App = () => {
             const [currentPage, setCurrentPage] = useState('overview');
 

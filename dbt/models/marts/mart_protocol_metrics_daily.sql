@@ -85,7 +85,6 @@ chain_concentration AS (
     FROM top_chain_with_lag
 ),
 
--- Generate flags and risk scores
 metrics_with_flags AS (
     SELECT
         tc.date,
@@ -98,7 +97,6 @@ metrics_with_flags AS (
         cc.top_chain_share_pct,
         cc.chain_concentration_change_7d_pp,
         
-        -- Build flags array
         ARRAY_REMOVE(ARRAY[
             CASE WHEN tc.tvl_change_1d_pct <= -3 THEN 'TVL_1D_DROP' END,
             CASE WHEN tc.tvl_change_7d_pct <= -8 THEN 'TVL_7D_DROP' END,
@@ -107,7 +105,6 @@ metrics_with_flags AS (
             CASE WHEN tc.tvl_1d_ago IS NULL OR tc.tvl_7d_ago IS NULL THEN 'DATA_GAP' END
         ], NULL) AS flags,
         
-        -- Calculate risk score
         LEAST(
             COALESCE(CASE WHEN tc.tvl_change_7d_pct <= -8 THEN 40 ELSE 0 END, 0) +
             COALESCE(CASE WHEN tc.tvl_change_1d_pct <= -3 THEN 20 ELSE 0 END, 0) +

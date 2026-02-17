@@ -1,6 +1,6 @@
 """
-Config-driven protocol TVL fetcher (Steps A + B)
-Reads endpoints from config/api.yaml, slugs from config/protocols.yaml
+Config-driven protocol TVL fetcher.
+Reads endpoints from config/api.yaml, slugs from config/protocols.yaml.
 """
 import os
 import json

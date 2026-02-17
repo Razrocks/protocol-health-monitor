@@ -8,7 +8,6 @@ WITH metrics AS (
     SELECT * FROM {{ ref('mart_protocol_metrics_daily') }}
 ),
 
--- Unnest flags into individual alert records
 alerts_exploded AS (
     SELECT
         m.date,
@@ -24,14 +23,12 @@ alerts_exploded AS (
     WHERE ARRAY_LENGTH(m.flags, 1) > 0
 ),
 
--- Add severity, thresholds, and messages
 alerts_enriched AS (
     SELECT
         date,
         protocol_id,
         alert_type,
         
-        -- Severity
         CASE alert_type
             WHEN 'TVL_1D_DROP' THEN 'med'
             WHEN 'TVL_7D_DROP' THEN 'high'
@@ -40,7 +37,6 @@ alerts_enriched AS (
             WHEN 'DATA_GAP' THEN 'low'
         END AS severity,
         
-        -- Value
         CASE alert_type
             WHEN 'TVL_1D_DROP' THEN tvl_change_1d_pct
             WHEN 'TVL_7D_DROP' THEN tvl_change_7d_pct
@@ -49,7 +45,6 @@ alerts_enriched AS (
             ELSE NULL
         END AS value_numeric,
         
-        -- Threshold
         CASE alert_type
             WHEN 'TVL_1D_DROP' THEN -3
             WHEN 'TVL_7D_DROP' THEN -8
@@ -58,7 +53,6 @@ alerts_enriched AS (
             ELSE NULL
         END AS threshold_numeric,
         
-        -- Message
         CASE alert_type
             WHEN 'TVL_1D_DROP' THEN 
                 protocol_name || ' TVL dropped ' || ROUND(ABS(tvl_change_1d_pct)::numeric, 2)::text || '% in 1 day'

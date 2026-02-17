@@ -1,6 +1,6 @@
 """
-Metric normalization and computation (Steps G + H)
-Computes lending metrics, TVL deltas, chain concentration
+Metric normalization and computation.
+Computes lending metrics, TVL deltas, chain concentration.
 """
 import statistics
 from datetime import date, timedelta
@@ -14,25 +14,20 @@ MATERIAL_TVL_THRESHOLD = 250_000_000  # $250M absolute
 
 
 def compute_lending_metrics(conn, protocol_id, pool_selections):
-    """Step G: Compute lending-specific metrics for a LENDING protocol.
-    Returns dict with lending_util_avg, lending_util_max, lending_spread_max,
-    lending_spread_median, rate CVs, per-pool detail, metric coverage, and data flags."""
+    """Compute lending-specific metrics for a LENDING protocol."""
 
     result = {
         'lending_util_avg': None,
         'lending_util_max': None,
-        # New: spread replaces ratio
         'lending_spread_max': None,
         'lending_spread_median': None,
-        # Kept for backward compat but gated
         'lending_ratio_max': None,
         'lending_ratio_median': None,
         'lending_rate_cv_supply_30d': None,
         'lending_rate_cv_borrow_30d': None,
-        # New: materiality + coverage
-        'pool_details': [],          # per-pool breakdown for alerts
-        'metric_coverage_util': None,  # % of selected TVL with util data
-        'metric_coverage_rate': None,  # % of selected TVL with rate data
+        'pool_details': [],
+        'metric_coverage_util': None,
+        'metric_coverage_rate': None,
         'flags': []
     }
 
@@ -46,7 +41,6 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
 
     selected_tvl_sum = float(selection.get('selected_pool_tvl_sum', 0) or 0)
 
-    # --- Utilization & APY data from pool_timeseries_daily (chartLendBorrow) ---
     with conn.cursor() as cur:
         cur.execute(
             """SELECT DISTINCT ON (pool_id)
@@ -59,7 +53,6 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
         )
         ts_rows = cur.fetchall()
 
-    # Also get pool TVL + name from pools_current for weighting + messages
     pool_info = {}
     with conn.cursor() as cur:
         cur.execute(
@@ -73,7 +66,6 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
                 'name': row[2] or row[0][:20]
             }
 
-    # Check data availability from timeseries
     any_totals = any(r[1] is not None and r[2] is not None for r in ts_rows)
     any_borrow = any(r[4] is not None for r in ts_rows)
 
@@ -82,7 +74,6 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
     if not any_borrow:
         result['flags'].append('MISSING_BORROW_FIELDS')
 
-    # Compute per-pool metrics with materiality tagging
     pool_details = []
     utilizations = []
     spreads = []
@@ -95,10 +86,8 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
         tvl = info['tvl']
         name = info['name']
 
-        # Compute pool share of selected TVL
         pool_share = tvl / selected_tvl_sum if selected_tvl_sum > 0 else 0
 
-        # Materiality check
         is_material = (pool_share >= MATERIAL_SHARE_THRESHOLD or
                        tvl >= MATERIAL_TVL_THRESHOLD)
 
@@ -113,7 +102,6 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
             'ratio': None,
         }
 
-        # Utilization
         if supply is not None and float(supply) > 0 and borrow is not None:
             util = float(borrow) / float(supply)
             detail['utilization'] = util
@@ -127,7 +115,6 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
             })
             total_tvl_with_util += tvl
 
-        # Spread and ratio
         if s_apy is not None and b_apy is not None:
             spread = float(b_apy) - float(s_apy)
             detail['spread'] = spread
@@ -151,12 +138,10 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
 
     result['pool_details'] = pool_details
 
-    # Metric coverage: % of selected TVL with required fields
     if selected_tvl_sum > 0:
         result['metric_coverage_util'] = total_tvl_with_util / selected_tvl_sum
         result['metric_coverage_rate'] = total_tvl_with_rate / selected_tvl_sum
 
-    # Aggregates: utilization
     if utilizations:
         result['lending_util_max'] = max(u['util'] for u in utilizations)
 
@@ -167,18 +152,15 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
         else:
             result['lending_util_avg'] = statistics.mean(u['util'] for u in utilizations)
 
-    # Aggregates: spread (replaces ratio as primary metric)
     if spreads:
         spread_values = [s['spread'] for s in spreads]
         result['lending_spread_max'] = max(spread_values)
         result['lending_spread_median'] = statistics.median(spread_values)
 
-    # Aggregates: ratio (gated — only pools with supply >= 0.5%)
     if ratios:
         result['lending_ratio_max'] = max(ratios)
         result['lending_ratio_median'] = statistics.median(ratios)
 
-    # --- Rate volatility (30-day CV from pool history) ---
     today = date.today()
     thirty_days_ago = today - timedelta(days=30)
 
@@ -220,7 +202,6 @@ def compute_lending_metrics(conn, protocol_id, pool_selections):
     if borrow_cvs:
         result['lending_rate_cv_borrow_30d'] = max(borrow_cvs)
 
-    # Check for insufficient history
     if history_days_counts and max(history_days_counts) < 21:
         result['flags'].append('INSUFFICIENT_HISTORY')
 
@@ -238,8 +219,7 @@ def _compute_cv(series):
 
 
 def compute_tvl_deltas(conn, protocol_id):
-    """Step H (part 1): Compute TVL percentage changes 1d/7d/30d.
-    Returns dict with tvl_usd, tvl_1d_pct, tvl_7d_pct, tvl_30d_pct, has_data_gap."""
+    """Compute TVL percentage changes 1d/7d/30d."""
 
     today = date.today()
     result = {
@@ -251,7 +231,6 @@ def compute_tvl_deltas(conn, protocol_id):
     }
 
     with conn.cursor() as cur:
-        # Get latest TVL
         cur.execute(
             """SELECT date, tvl_usd FROM protocol_tvl_daily
                WHERE protocol_id = %s ORDER BY date DESC LIMIT 1""",
@@ -266,7 +245,6 @@ def compute_tvl_deltas(conn, protocol_id):
         result['tvl_usd'] = float(latest[1])
         latest_date = latest[0]
 
-        # 1-day comparison
         target_1d = latest_date - timedelta(days=1)
         cur.execute(
             """SELECT tvl_usd FROM protocol_tvl_daily
@@ -280,7 +258,6 @@ def compute_tvl_deltas(conn, protocol_id):
         else:
             result['has_data_gap'] = True
 
-        # 7-day comparison
         target_7d = latest_date - timedelta(days=7)
         cur.execute(
             """SELECT tvl_usd FROM protocol_tvl_daily
@@ -294,7 +271,6 @@ def compute_tvl_deltas(conn, protocol_id):
         else:
             result['has_data_gap'] = True
 
-        # 30-day comparison
         target_30d = latest_date - timedelta(days=30)
         cur.execute(
             """SELECT tvl_usd FROM protocol_tvl_daily
@@ -310,8 +286,7 @@ def compute_tvl_deltas(conn, protocol_id):
 
 
 def compute_chain_concentration(conn, protocol_id):
-    """Step H (part 2): Compute top chain share and 7d change.
-    Returns dict with top_chain, top_chain_share_pct, top_chain_share_change_7d_pp."""
+    """Compute top chain share and 7d change."""
 
     today = date.today()
     result = {
@@ -321,7 +296,6 @@ def compute_chain_concentration(conn, protocol_id):
     }
 
     with conn.cursor() as cur:
-        # Get latest chain breakdown
         cur.execute(
             """SELECT chain, tvl_usd FROM protocol_chain_tvl_daily
                WHERE protocol_id = %s AND date = (
@@ -346,7 +320,6 @@ def compute_chain_concentration(conn, protocol_id):
     result['top_chain'] = top_chain
     result['top_chain_share_pct'] = top_chain_share
 
-    # 7d ago comparison
     seven_days_ago = today - timedelta(days=7)
     with conn.cursor() as cur:
         cur.execute(
@@ -364,7 +337,6 @@ def compute_chain_concentration(conn, protocol_id):
     if old_chains:
         old_total = sum(c[1] for c in old_chains if c[1])
         if old_total > 0:
-            # Find the same chain's share 7d ago
             old_top_share = None
             for chain, tvl in old_chains:
                 if chain == top_chain:

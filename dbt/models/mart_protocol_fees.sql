@@ -1,6 +1,3 @@
--- dbt model: mart_protocol_fees.sql
--- Aggregated fees and revenue metrics with trends
-
 WITH daily_fees AS (
     SELECT
         pf.protocol_id,
@@ -10,7 +7,6 @@ WITH daily_fees AS (
         pf.fees_24h,
         pf.revenue_24h,
         pf.users_24h,
-        -- Calculate moving averages
         AVG(pf.fees_24h) OVER (
             PARTITION BY pf.protocol_id 
             ORDER BY pf.date 
@@ -21,7 +17,6 @@ WITH daily_fees AS (
             ORDER BY pf.date 
             ROWS BETWEEN 29 PRECEDING AND CURRENT ROW
         ) as fees_30d_ma,
-        -- Calculate totals
         SUM(pf.fees_24h) OVER (
             PARTITION BY pf.protocol_id 
             ORDER BY pf.date 
@@ -45,20 +40,16 @@ WITH daily_fees AS (
 latest_metrics AS (
     SELECT
         df.*,
-        -- Get latest TVL for efficiency calculation
         m.tvl_usd,
-        -- Calculate trends
         CASE 
             WHEN df.fees_7d_ma > df.fees_30d_ma THEN 'INCREASING'
             WHEN df.fees_7d_ma < df.fees_30d_ma * 0.95 THEN 'DECREASING'
             ELSE 'STABLE'
         END as fees_trend,
-        -- TVL to fees ratio (efficiency metric)
         CASE 
             WHEN df.fees_30d_total > 0 THEN m.tvl_usd / df.fees_30d_total
             ELSE NULL
         END as tvl_to_fees_ratio,
-        -- Sustainability score
         CASE 
             WHEN m.tvl_usd / NULLIF(df.fees_30d_total, 0) < 1000 THEN 'HIGH'
             WHEN m.tvl_usd / NULLIF(df.fees_30d_total, 0) < 5000 THEN 'MEDIUM'
@@ -91,7 +82,6 @@ SELECT
     fees_trend,
     tvl_to_fees_ratio,
     sustainability_rating,
-    -- Annualized revenue rate
     CASE 
         WHEN tvl_usd > 0 AND revenue_30d_total > 0 
         THEN (revenue_30d_total / tvl_usd) * 100 * 12

@@ -1,6 +1,5 @@
 """
-Main ingestion pipeline orchestrator (10-step pipeline)
-Replaces run_ingestion.py with category-aware risk monitoring pipeline
+Main ingestion pipeline orchestrator.
 """
 import os
 import sys
@@ -10,7 +9,6 @@ import requests
 from datetime import datetime, date
 from psycopg2.extras import Json
 
-# Add parent to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from ingest.protocol_fetch import load_config, validate_config, fetch_all_protocols, load_protocol_tvl
@@ -33,7 +31,7 @@ def get_connection():
 
 
 def create_run(conn, git_sha=None):
-    """Step A: Start a new pipeline run"""
+    """Start a new pipeline run."""
     with conn.cursor() as cur:
         cur.execute(
             """INSERT INTO ingestion_runs (started_at, status, git_sha)
@@ -46,7 +44,7 @@ def create_run(conn, git_sha=None):
 
 
 def finish_run(conn, run_id, status, error_message=None, notes=None):
-    """Step J: Mark run complete"""
+    """Mark run complete."""
     with conn.cursor() as cur:
         cur.execute(
             """UPDATE ingestion_runs
@@ -64,10 +62,7 @@ def run_pipeline(git_sha=None):
     print(f"Started: {datetime.now()}")
     print("=" * 60)
 
-    # Load configuration
     api_config, protocols_config = load_config()
-
-    # Validate config (warn about REPLACE_ME but don't block)
     config_errors = validate_config(protocols_config)
     if config_errors:
         print("\nWARNING: Some protocols have incomplete config:")
@@ -81,16 +76,10 @@ def run_pipeline(git_sha=None):
     session.headers.update({'User-Agent': 'Protocol-Health-Monitor/2.0'})
 
     try:
-        # ========================================
-        # Step A: Start run
-        # ========================================
         print("\n[A] Starting pipeline run...")
         run_id = create_run(conn, git_sha)
         print(f"  Run ID: {run_id}")
 
-        # ========================================
-        # Step B: Fetch protocol-level TVL JSON
-        # ========================================
         print("\n[B] Fetching protocol TVL data...")
         protocol_data = fetch_all_protocols(api_config, protocols_config)
 
@@ -115,9 +104,6 @@ def run_pipeline(git_sha=None):
         conn.commit()
         print(f"  Loaded {len(protocol_data)} protocols")
 
-        # ========================================
-        # Step C: Fetch pools JSON
-        # ========================================
         print("\n[C] Fetching pools snapshot...")
         raw_pools = fetch_pools(session, api_config)
 
@@ -125,16 +111,10 @@ def run_pipeline(git_sha=None):
             store_raw_pools(conn, run_id, raw_pools)
             conn.commit()
 
-            # ========================================
-            # Step D: Map pools to protocols
-            # ========================================
             print("\n[D] Mapping pools to monitored protocols...")
             mapped_count = map_and_store_pools(conn, run_id, raw_pools, protocols_config)
             conn.commit()
 
-            # ========================================
-            # Step E: Select top pools (80% cumulative TVL)
-            # ========================================
             print("\n[E] Selecting top pools per protocol...")
             pool_selections = select_top_pools(conn, run_id, protocols_config, api_config)
             conn.commit()
@@ -142,9 +122,6 @@ def run_pipeline(git_sha=None):
             print("  WARNING: Failed to fetch pools, skipping pool-level analysis")
             pool_selections = {}
 
-        # ========================================
-        # Step F: Fetch pool history (lending only)
-        # ========================================
         print("\n[F] Fetching lending pool history...")
         try:
             history_stats = fetch_lending_pool_history(
@@ -156,9 +133,6 @@ def run_pipeline(git_sha=None):
             print("  Continuing with available data...")
             history_stats = {}
 
-        # ========================================
-        # Step G: Compute lending metrics
-        # ========================================
         print("\n[G] Computing lending metrics...")
         lending_results = {}
         with conn.cursor() as cur:
@@ -176,9 +150,6 @@ def run_pipeline(git_sha=None):
                 util_str = f"util_avg={metrics['lending_util_avg']:.2%}" if metrics['lending_util_avg'] else "no util data"
                 print(f"  {name}: {util_str}{flag_str}")
 
-        # ========================================
-        # Step H: Compute protocol-level deltas
-        # ========================================
         print("\n[H] Computing TVL deltas and chain concentration...")
         tvl_results = {}
         chain_results = {}
@@ -193,12 +164,8 @@ def run_pipeline(git_sha=None):
             tvl_str = f"1d={tvl_deltas['tvl_1d_pct']:+.2f}%" if tvl_deltas['tvl_1d_pct'] is not None else "1d=N/A"
             print(f"  {name}: {tvl_str}, top_chain={chain_conc.get('top_chain', 'N/A')}")
 
-        # ========================================
-        # Step I: Compute alerts + risk score
-        # ========================================
         print("\n[I] Computing alerts and risk scores...")
 
-        # Build combined metrics per protocol and store to protocol_risk_metrics_daily
         today = date.today()
         for protocol_id, name, category in all_protocols:
             tvl = tvl_results.get(protocol_id, {})
@@ -206,7 +173,6 @@ def run_pipeline(git_sha=None):
             lending = lending_results.get(protocol_id, {})
             pool_sel = pool_selections.get(protocol_id, {})
 
-            # Compute top_pool_share_total (top pool as % of ALL pool TVL, not just selected)
             top_pool_share_total = None
             if pool_sel.get('top_pool_share') is not None:
                 with conn.cursor() as cur:
@@ -217,7 +183,6 @@ def run_pipeline(git_sha=None):
                     )
                     total_all = cur.fetchone()[0]
                     if total_all and float(total_all) > 0:
-                        # top pool TVL = top_pool_share * selected_tvl_sum
                         sel_sum = float(pool_sel.get('selected_pool_tvl_sum', 0) or 0)
                         if sel_sum > 0 and pool_sel['top_pool_share'] is not None:
                             top_tvl = pool_sel['top_pool_share'] * sel_sum
@@ -251,19 +216,14 @@ def run_pipeline(git_sha=None):
                 'lending_flags': lending.get('flags', []),
             }
 
-            # Generate alerts
             alerts = generate_alerts(protocol_id, category, metrics)
-
-            # Compute risk score
             risk_score, risk_flags = compute_risk_scores(
                 protocol_id, category, alerts, metrics
             )
 
-            # Add data flags to risk_flags
             for flag in metrics.get('lending_flags', []):
                 risk_flags[flag] = {'points': 0, 'info': True}
 
-            # Store to protocol_risk_metrics_daily
             with conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO protocol_risk_metrics_daily
@@ -327,14 +287,12 @@ def run_pipeline(git_sha=None):
                      risk_score, Json(risk_flags))
                 )
 
-            # Remove stale alerts for this protocol+date before inserting fresh set
             with conn.cursor() as cur:
                 cur.execute(
                     "DELETE FROM alerts_daily WHERE date = %s AND protocol_id = %s",
                     (today, protocol_id)
                 )
 
-            # Store alerts to alerts_daily
             for alert in alerts:
                 with conn.cursor() as cur:
                     cur.execute(
@@ -359,15 +317,11 @@ def run_pipeline(git_sha=None):
 
         conn.commit()
 
-        # ========================================
-        # Step J: Mark run success
-        # ========================================
         print("\n[J] Finalizing run...")
         notes = f"Protocols: {len(protocol_data)}, Pools mapped: {mapped_count if raw_pools else 0}"
         finish_run(conn, run_id, 'success', notes=notes)
 
-        # Optional: Run fees ingestion
-        print("\n[+] Running fees ingestion (optional)...")
+        print("\n[+] Running fees ingestion...")
         try:
             sys.path.insert(0, os.path.dirname(__file__))
             from ingest_fees import load_fees_to_db

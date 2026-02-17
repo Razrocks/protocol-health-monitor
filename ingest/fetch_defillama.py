@@ -76,7 +76,6 @@ def main():
     
     print(f"\nFetched {len(results)}/{len(protocols)} protocols")
     
-    # Save to file for inspection
     output_path = "defillama_test_output.json"
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=2)

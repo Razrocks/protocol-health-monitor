@@ -1,7 +1,5 @@
 """
 Shared metric computation helpers for the risk engine.
-These are convenience wrappers used by alerts.py and scoring.py.
-The heavy computation is done in ingest/normalize.py.
 """
 
 

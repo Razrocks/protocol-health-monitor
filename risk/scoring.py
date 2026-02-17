@@ -1,9 +1,8 @@
 """
-Risk score computation (Step I, part 2)
+Risk score computation.
 Computes final risk score with category-specific guardrails.
 """
 
-# Alert types that are lending-specific (for coverage guardrail)
 LENDING_ALERT_TYPES = {
     'UTILIZATION_CRITICAL',
     'UTILIZATION_EXTREME',
@@ -17,7 +16,6 @@ LENDING_ALERT_TYPES = {
     'DATA_INCOMPLETE_UTIL',
     'DATA_INCOMPLETE_RATE',
 }
-
 
 def compute_risk_scores(protocol_id, category, alerts, metrics):
     """Compute final risk score with guardrails.
@@ -40,13 +38,11 @@ def compute_risk_scores(protocol_id, category, alerts, metrics):
         alert_type = alert['alert_type']
         points = alert['points']
 
-        # Classify points as global or lending-specific
         if alert_type in LENDING_ALERT_TYPES:
             lending_points += points
         else:
             global_points += points
 
-        # Build risk_flags for explainability
         risk_flags[alert_type] = {
             'points': points,
             'severity': alert['severity'],
@@ -77,11 +73,9 @@ def compute_risk_scores(protocol_id, category, alerts, metrics):
             'info': 'Lending points reduced: <50% of selected TVL has utilization data'
         }
 
-    # Sum and cap at 100
     total = min(global_points + lending_points, 100)
 
     return total, risk_flags
-
 
 def _safe_float(value):
     """Convert to float safely for JSON serialization"""

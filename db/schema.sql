@@ -1,9 +1,6 @@
--- Protocol Health Monitor - Full Database Schema (v2: Category-Aware Risk Monitor)
+-- Protocol Health Monitor - Full Database Schema
 -- Use this for fresh deployments. For upgrades, use db/migrations/
 
--- ============================================================
--- 1. Static protocol configuration
--- ============================================================
 CREATE TABLE IF NOT EXISTS protocols (
     protocol_id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -15,9 +12,6 @@ CREATE TABLE IF NOT EXISTS protocols (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================
--- 2. Ingestion run tracking
--- ============================================================
 CREATE TABLE IF NOT EXISTS ingestion_runs (
     run_id SERIAL PRIMARY KEY,
     started_at TIMESTAMP NOT NULL,
@@ -29,9 +23,6 @@ CREATE TABLE IF NOT EXISTS ingestion_runs (
     CONSTRAINT valid_status CHECK (status IN ('running', 'success', 'failed'))
 );
 
--- ============================================================
--- 3. Raw snapshots from DeFiLlama protocol endpoint
--- ============================================================
 CREATE TABLE IF NOT EXISTS raw_protocol_snapshots (
     snapshot_id SERIAL PRIMARY KEY,
     run_id INTEGER NOT NULL REFERENCES ingestion_runs(run_id),
@@ -41,9 +32,6 @@ CREATE TABLE IF NOT EXISTS raw_protocol_snapshots (
     UNIQUE(run_id, protocol_id)
 );
 
--- ============================================================
--- 4. Daily TVL time series
--- ============================================================
 CREATE TABLE IF NOT EXISTS protocol_tvl_daily (
     id SERIAL PRIMARY KEY,
     date DATE NOT NULL,
@@ -54,9 +42,6 @@ CREATE TABLE IF NOT EXISTS protocol_tvl_daily (
     UNIQUE(date, protocol_id)
 );
 
--- ============================================================
--- 5. Chain breakdown daily
--- ============================================================
 CREATE TABLE IF NOT EXISTS protocol_chain_tvl_daily (
     id SERIAL PRIMARY KEY,
     date DATE NOT NULL,
@@ -67,9 +52,6 @@ CREATE TABLE IF NOT EXISTS protocol_chain_tvl_daily (
     UNIQUE(date, protocol_id, chain)
 );
 
--- ============================================================
--- 6. Legacy computed metrics (kept for backward compatibility)
--- ============================================================
 CREATE TABLE IF NOT EXISTS protocol_metrics_daily (
     id SERIAL PRIMARY KEY,
     date DATE NOT NULL,
@@ -88,9 +70,6 @@ CREATE TABLE IF NOT EXISTS protocol_metrics_daily (
     CONSTRAINT valid_risk_score CHECK (risk_score >= 0 AND risk_score <= 100)
 );
 
--- ============================================================
--- 7. Alerts
--- ============================================================
 CREATE TABLE IF NOT EXISTS alerts_daily (
     alert_id SERIAL PRIMARY KEY,
     date DATE NOT NULL,
@@ -105,9 +84,6 @@ CREATE TABLE IF NOT EXISTS alerts_daily (
     CONSTRAINT valid_severity CHECK (severity IN ('low', 'med', 'high', 'crit'))
 );
 
--- ============================================================
--- 8. Protocol fees (existing feature)
--- ============================================================
 CREATE TABLE IF NOT EXISTS protocol_fees (
     fee_id SERIAL PRIMARY KEY,
     protocol_id INTEGER NOT NULL REFERENCES protocols(protocol_id),
@@ -119,9 +95,6 @@ CREATE TABLE IF NOT EXISTS protocol_fees (
     UNIQUE(protocol_id, date)
 );
 
--- ============================================================
--- 9. Raw pools JSON storage (one row per pipeline run)
--- ============================================================
 CREATE TABLE IF NOT EXISTS raw_pools_json (
     id SERIAL PRIMARY KEY,
     run_id INTEGER NOT NULL REFERENCES ingestion_runs(run_id),
@@ -130,9 +103,6 @@ CREATE TABLE IF NOT EXISTS raw_pools_json (
     raw_json JSONB NOT NULL
 );
 
--- ============================================================
--- 10. Current pool snapshots (parsed from yields API)
--- ============================================================
 CREATE TABLE IF NOT EXISTS pools_current (
     id SERIAL PRIMARY KEY,
     run_id INTEGER NOT NULL REFERENCES ingestion_runs(run_id),
@@ -156,9 +126,6 @@ CREATE TABLE IF NOT EXISTS pools_current (
     UNIQUE(run_id, pool_id)
 );
 
--- ============================================================
--- 11. Pool time series (lending history for rate volatility)
--- ============================================================
 CREATE TABLE IF NOT EXISTS pool_timeseries_daily (
     id SERIAL PRIMARY KEY,
     pool_id VARCHAR(200) NOT NULL,
@@ -170,9 +137,6 @@ CREATE TABLE IF NOT EXISTS pool_timeseries_daily (
     UNIQUE(pool_id, date)
 );
 
--- ============================================================
--- 12. Protocol pool selection tracking
--- ============================================================
 CREATE TABLE IF NOT EXISTS protocol_pool_selection_daily (
     id SERIAL PRIMARY KEY,
     date DATE NOT NULL,
@@ -186,9 +150,6 @@ CREATE TABLE IF NOT EXISTS protocol_pool_selection_daily (
     UNIQUE(date, protocol_id)
 );
 
--- ============================================================
--- 13. Expanded risk metrics (primary metrics table)
--- ============================================================
 CREATE TABLE IF NOT EXISTS protocol_risk_metrics_daily (
     id SERIAL PRIMARY KEY,
     date DATE NOT NULL,
@@ -217,9 +178,6 @@ CREATE TABLE IF NOT EXISTS protocol_risk_metrics_daily (
     CONSTRAINT valid_risk_score_v2 CHECK (risk_score >= 0 AND risk_score <= 100)
 );
 
--- ============================================================
--- Indexes
--- ============================================================
 CREATE INDEX IF NOT EXISTS idx_protocol_tvl_daily_date ON protocol_tvl_daily(date);
 CREATE INDEX IF NOT EXISTS idx_protocol_tvl_daily_protocol ON protocol_tvl_daily(protocol_id);
 CREATE INDEX IF NOT EXISTS idx_protocol_chain_tvl_daily_date ON protocol_chain_tvl_daily(date);
@@ -240,9 +198,6 @@ CREATE INDEX IF NOT EXISTS idx_risk_metrics_date ON protocol_risk_metrics_daily(
 CREATE INDEX IF NOT EXISTS idx_risk_metrics_protocol ON protocol_risk_metrics_daily(protocol_id);
 CREATE INDEX IF NOT EXISTS idx_risk_metrics_score ON protocol_risk_metrics_daily(risk_score DESC);
 
--- ============================================================
--- Seed protocol data
--- ============================================================
 INSERT INTO protocols (name, slug, category, protocol_slug, yields_project, enabled) VALUES
     ('Aave V3', 'aave-v3', 'LENDING', 'aave-v3', 'Aave V3', true),
     ('Sky', 'sky', 'LENDING', 'sky-lending', NULL, true),

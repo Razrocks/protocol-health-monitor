@@ -1,5 +1,5 @@
 """
-Flask API for Protocol Health Monitor Dashboard (v2: Category-Aware Risk Monitor)
+Flask API for Protocol Health Monitor Dashboard
 """
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -36,10 +36,6 @@ def decimal_to_float(obj):
     return obj
 
 
-# ============================================================
-# Health & Status
-# ============================================================
-
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -66,10 +62,6 @@ def get_run_status():
     return jsonify(decimal_to_float(runs))
 
 
-# ============================================================
-# Protocols
-# ============================================================
-
 @app.route('/api/protocols', methods=['GET'])
 def get_protocols():
     """Get all protocols with category and config info"""
@@ -89,10 +81,6 @@ def get_protocols():
 
     return jsonify(decimal_to_float(protocols))
 
-
-# ============================================================
-# Overview
-# ============================================================
 
 @app.route('/api/overview', methods=['GET'])
 def get_overview():
@@ -165,10 +153,6 @@ def get_overview():
 
     return jsonify(decimal_to_float(output))
 
-
-# ============================================================
-# Protocol Detail
-# ============================================================
 
 @app.route('/api/protocol/<int:protocol_id>', methods=['GET'])
 def get_protocol_detail(protocol_id):
@@ -256,10 +240,6 @@ def get_protocol_detail(protocol_id):
     }))
 
 
-# ============================================================
-# Protocol Pools
-# ============================================================
-
 @app.route('/api/protocol/<int:protocol_id>/pools', methods=['GET'])
 def get_protocol_pools(protocol_id):
     """Get selected pools with current metrics for a protocol"""
@@ -302,7 +282,6 @@ def get_protocol_pools(protocol_id):
             SELECT
                 pc.pool_id, pc.pool_name, pc.chain, pc.project,
                 pc.tvl_usd,
-                -- Prefer timeseries APY data (from chartLendBorrow) over snapshot
                 COALESCE(ts.supply_apy_total, pc.supply_apy_total) AS supply_apy_total,
                 pc.supply_apy_base, pc.supply_apy_reward,
                 COALESCE(ts.borrow_apy_total, pc.borrow_apy_total) AS borrow_apy_total,
@@ -371,10 +350,6 @@ def get_protocol_pools(protocol_id):
     return jsonify(decimal_to_float(pools))
 
 
-# ============================================================
-# Protocol Chains
-# ============================================================
-
 @app.route('/api/protocol/<int:protocol_id>/chains', methods=['GET'])
 def get_protocol_chains(protocol_id):
     """Get chain breakdown over time for a protocol"""
@@ -397,10 +372,6 @@ def get_protocol_chains(protocol_id):
 
     return jsonify(decimal_to_float(chains))
 
-
-# ============================================================
-# Risk Detail (category-specific)
-# ============================================================
 
 @app.route('/api/protocol/<int:protocol_id>/risk-detail', methods=['GET'])
 def get_protocol_risk_detail(protocol_id):
@@ -465,10 +436,6 @@ def get_protocol_risk_detail(protocol_id):
 
     return jsonify(decimal_to_float(result))
 
-
-# ============================================================
-# Daily Brief
-# ============================================================
 
 @app.route('/api/daily-brief', methods=['GET'])
 def get_daily_brief():
@@ -562,10 +529,6 @@ def get_daily_brief():
     }))
 
 
-# ============================================================
-# Top Pools (full universe, for concentration tooltips)
-# ============================================================
-
 @app.route('/api/protocol/<int:protocol_id>/top-pools', methods=['GET'])
 def get_top_pools(protocol_id):
     """Get top N pools from full pool universe for concentration panel tooltips."""
@@ -618,10 +581,6 @@ def get_top_pools(protocol_id):
     return jsonify(decimal_to_float({'total_pool_tvl': float(total), 'pools': result}))
 
 
-# ============================================================
-# TVL History (for Indexed TVL Overlay chart)
-# ============================================================
-
 @app.route('/api/tvl-history', methods=['GET'])
 def get_tvl_history():
     """Get daily TVL for all enabled protocols within a window.
@@ -648,10 +607,6 @@ def get_tvl_history():
 
     return jsonify(decimal_to_float(rows))
 
-
-# ============================================================
-# Alert Drivers (for Risk Drivers bar chart)
-# ============================================================
 
 @app.route('/api/alert-drivers', methods=['GET'])
 def get_alert_drivers():
@@ -714,10 +669,6 @@ def get_alert_drivers():
 
     return jsonify(decimal_to_float({'date': target_date, 'drivers': drivers}))
 
-
-# ============================================================
-# Fees (existing feature, kept as-is)
-# ============================================================
 
 @app.route('/api/fees/<protocol_slug>', methods=['GET'])
 def get_protocol_fees(protocol_slug):

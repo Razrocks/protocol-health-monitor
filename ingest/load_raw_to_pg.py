@@ -88,7 +88,6 @@ class PostgresLoader:
             print(f"No TVL data for protocol {protocol_id}")
             return
         
-        # Prepare records
         records = []
         for point in tvl_data:
             if isinstance(point, dict) and 'date' in point and 'totalLiquidityUSD' in point:
@@ -101,7 +100,6 @@ class PostgresLoader:
             print(f"No valid TVL records for protocol {protocol_id}")
             return
         
-        # Batch insert with upsert
         with self.conn.cursor() as cur:
             execute_values(
                 cur,
@@ -122,12 +120,10 @@ class PostgresLoader:
         chain_tvls = raw_data.get('chainTvls', {})
         current_chain_tvls = raw_data.get('currentChainTvls', {})
         
-        # Get the most recent TVL data point to extract date
         tvl_data = raw_data.get('tvl', [])
         if not tvl_data:
             return
         
-        # Use current date for the latest snapshot
         snapshot_date = date.today()
         
         records = []
@@ -140,7 +136,6 @@ class PostgresLoader:
             print(f"No chain TVL data for protocol {protocol_id}")
             return
         
-        # Batch insert with upsert
         with self.conn.cursor() as cur:
             execute_values(
                 cur,
@@ -165,13 +160,10 @@ class PostgresLoader:
             return False
         
         try:
-            # Save raw snapshot
             self.save_raw_snapshot(run_id, protocol_id, raw_data)
             
-            # Parse and load TVL history
             self.parse_and_load_tvl_history(protocol_id, raw_data)
             
-            # Parse and load chain TVL
             self.parse_and_load_chain_tvl(protocol_id, raw_data)
             
             self.conn.commit()
