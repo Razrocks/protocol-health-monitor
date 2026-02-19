@@ -31,7 +31,7 @@ Outputs:
 
 ## Data sources
 
-This project uses **DeFiLlama**:
+This project uses DeFiLlama:
 
 - Protocol TVL + chain breakdown: protocol endpoint (per protocol slug)
 - Pool universe: yields pools endpoint (pool concentration + pool selection)
@@ -46,7 +46,7 @@ This project uses **DeFiLlama**:
 - Dashboard: single-file React + Chart.js (served via Nginx)
 - Deployment: Docker Compose (db + api + dashboard)
 
-## Risk scoring (explainable)
+## Risk scoring
 
 Risk score = sum of alert points, capped at 100. Alerts are category-aware and guardrailed.
 
